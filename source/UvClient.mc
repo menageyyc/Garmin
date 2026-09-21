@@ -125,9 +125,9 @@ class UvClient {
 
         // The API reports the elevation of the grid cell it answered for. That
         // is the baseline the altitude correction works against in v1.
-        var elevation = data.get("elevation");
+        var elevation = asFloat(data.get("elevation"));
         if (elevation != null) {
-            state.gridElevation = elevation.toFloat();
+            state.gridElevation = elevation;
         }
 
         var hourly = data.get("hourly");
@@ -144,12 +144,20 @@ class UvClient {
         }
 
         var idx = currentHourIndex(times);
-        if (idx < 0 || idx >= values.size() || values[idx] == null) {
+        if (idx < 0 || idx >= values.size()) {
             fail(code, "No value for now");
             return;
         }
 
-        state.uvIndex = values[idx].toFloat();
+        // A null here is normal, not a fault: the series carries gaps where the
+        // model has no value for an hour.
+        var uv = asFloat(values[idx]);
+        if (uv == null) {
+            fail(code, "No value for now");
+            return;
+        }
+
+        state.uvIndex = uv;
         state.fetchedAtEpoch = Time.now().value();
         state.errorText = null;
         state.requestInFlight = false;
@@ -164,7 +172,7 @@ class UvClient {
         var now = Time.now().value();
         var best = -1;
         for (var i = 0; i < times.size(); i += 1) {
-            var t = times[i];
+            var t = asNumber(times[i]);
             if (t != null && t <= now) {
                 best = i;
             } else {
@@ -173,6 +181,25 @@ class UvClient {
         }
         // Before the first entry, fall back to the first rather than failing.
         return best < 0 ? 0 : best;
+    }
+
+    // JSON values arrive typed as Object, which carries no arithmetic or
+    // conversion methods - hence "Cannot find symbol ':toFloat' on type
+    // '$.Toybox.Lang.Object'". Narrowing explicitly beats casting blind,
+    // because Open-Meteo really does return an integer where a value happens
+    // to be whole and a float otherwise, so both branches get taken.
+    private function asFloat(value) as Lang.Float or Null {
+        if (value instanceof Lang.Float)  { return value; }
+        if (value instanceof Lang.Double) { return value.toFloat(); }
+        if (value instanceof Lang.Number) { return value.toFloat(); }
+        if (value instanceof Lang.Long)   { return value.toFloat(); }
+        return null;
+    }
+
+    private function asNumber(value) as Lang.Number or Null {
+        if (value instanceof Lang.Number) { return value; }
+        if (value instanceof Lang.Long)   { return value.toNumber(); }
+        return null;
     }
 
     private function httpHint(code as Number) as String {

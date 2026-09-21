@@ -10,9 +10,8 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## Current phase
 
-**v0 scaffolded, untested.** Source is in the repo but has never been
-compiled — this sandbox cannot reach Garmin to fetch the SDK. First build
-happens on Matt's Windows 11 machine.
+**v0 compiling on Matt's machine.** Toolchain is working end to end: SDK,
+Java, developer key, device target all confirmed. Fixing compile errors.
 
 Next action: Matt installs the SDK per `docs/TOOLCHAIN.md`, builds v0 in the
 simulator, and reports what breaks. Expect compile errors — nothing here has
@@ -31,11 +30,11 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | 5 | Store-published or sideload-only | Review, health wording, licence | Open |
 | 6 | Which API level group does epix Pro sit under? | Target API level | **Answered: API 5.2. SDK 9.2.0 installed** |
 | 7 | App + glance + background memory budgets, from local SDK | Architecture limits | Open |
-| 8 | Exact manifest device ID for epix Pro 47mm | Manifest | Open - check %APPDATA%\Garmin\ConnectIQ\Devices folder names |
+| 8 | Exact manifest device ID for epix Pro 47mm | Manifest | **Answered: `epix2pro47mm` is correct - compiler accepted it** |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
 | 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | Open - untestable from sandbox |
-| 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | Open - check SDK device list |
+| 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | **Answered: yes** |
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 
 ---
@@ -228,3 +227,18 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
   appears. Added as the leading warning in step 4.
 - ZIP extracts nest one level deep, so the folder to open is
   garmin\Garmin-claude-garmin-uv-tracking-app-7y6gk6\, not garmin\.
+
+### 2026-09-21 - First real build
+- Toolchain fully working. The build reached Matt's source and compiled it.
+- **Device id `epix2pro47mm` CONFIRMED correct** - the compiler accepted it.
+- Two findings, both genuine:
+  - WARNING UvGlanceView.mc:20 - unused local `w`. Removed.
+  - ERROR UvClient.mc:130 - "Cannot find symbol ':toFloat' on type
+    '$.Toybox.Lang.Object'". JSON values come back typed as Object, which has no
+    conversion methods. Dictionary.get() and Array indexing both return Object
+    regardless of narrowing the container.
+- Fixed with explicit asFloat()/asNumber() narrowing helpers rather than blind
+  casts, since Open-Meteo returns integers for whole values and floats otherwise
+  so both branches are genuinely taken. Also applied to the unixtime comparison
+  in currentHourIndex, which had the same latent problem.
+- Did NOT lower typeCheckLevel. The strict checker caught real looseness.

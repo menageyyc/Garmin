@@ -17,7 +17,6 @@ class UvGlanceView extends WatchUi.GlanceView {
 
     function onUpdate(dc as Graphics.Dc) as Void {
         var state = UvState.get();
-        var w = dc.getWidth();
         var h = dc.getHeight();
 
         dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_BLACK);
