@@ -87,6 +87,7 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | Hotkey to toggle the session | Connect IQ apps are not assignable hotkey targets on Epix Pro. Confirmed on the device |
 | App sets a system timer or alarm | No Connect IQ API exists. The API can read alarm count only |
 | Tap the glance to toggle the session | Input delegate methods are not invoked while a glance view is running |
+| Concluding the SDK is missing because `monkeyc` fails in a terminal | The SDK Manager does not put its bin folder on PATH. Verify via the VS Code extension instead |
 | Native repeating timer as a default in protect mode | The app cannot stop it either, so it keeps buzzing after the session ends. Fine in tan mode, where sessions are short |
 | Fitzpatrick roman-numeral dropdown | Produces an authoritative-looking number that predicts almost nothing |
 
@@ -175,3 +176,14 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 - Device id still to confirm from %APPDATA%\Garmin\ConnectIQ\Devices folder names.
 - Noted for v3: the AMOLED family shares profiles, so three resolutions (390,
   416, 454) reach six or more products.
+
+### 2026-09-21 - monkeyc PATH gotcha
+- Copilot ran `monkeyc -v` in the VS Code terminal, got exit 1, and concluded the
+  SDK was not installed. The evidence was right; the inference was wrong.
+- Cause: the SDK Manager does not add its bin folder to PATH. The SDK is present
+  and current (9.2.0, confirmed). The VS Code extension locates it independently.
+- Correct verification is `Monkey C: Verify Installation` in VS Code, not a
+  terminal command.
+- Added `.github/copilot-instructions.md` as a thin pointer to CLAUDE.md and this
+  file, so Copilot stops contradicting settled constraints. Deliberately a
+  pointer rather than a copy, to avoid the two files drifting apart.

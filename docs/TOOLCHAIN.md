@@ -176,6 +176,28 @@ with.
 - [ ] Note the app memory budget the simulator reports. Background services are
       commonly capped near 32 KB and that is the tightest constraint in the project.
 
+## `monkeyc` is not on PATH, and that is normal
+
+Running `monkeyc` in a terminal will fail even with the SDK correctly installed.
+The SDK Manager does not add its `bin` folder to PATH. **A failing `monkeyc`
+command is not evidence that the SDK is missing.**
+
+You do not need the CLI. The VS Code Monkey C extension finds the SDK itself.
+Verify the installation the supported way instead:
+
+`Ctrl+Shift+P` → **Monkey C: Verify Installation**
+
+If you *want* the CLI anyway, the compiler lives at:
+
+```
+%APPDATA%\Garmin\ConnectIQ\Sdks\<sdk-folder>\bin
+```
+
+Add that folder to your PATH. Note the folder name carries the SDK version, so
+it changes on every SDK update and the PATH entry has to be updated with it —
+another reason to prefer the extension. Once on PATH, running `monkeyc` with no
+arguments prints usage, which is the reliable check.
+
 ## If the build complains about type annotations
 
 Monkey C's type checker has several strictness levels and the default changes
