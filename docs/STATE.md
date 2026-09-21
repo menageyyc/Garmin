@@ -10,12 +10,13 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## Current phase
 
-**Pre-v0 — scoping.** Nothing built yet. No source in the repo.
+**v0 scaffolded, untested.** Source is in the repo but has never been
+compiled — this sandbox cannot reach Garmin to fetch the SDK. First build
+happens on Matt's Windows 11 machine.
 
-Next action: scaffold the v0 project skeleton (manifest targeting epix Pro 47 mm,
-resources, one view) and get the Windows toolchain proven end to end on the
-user's machine. Blocking items 6-8 and 11 are all answered from the locally
-installed SDK and simulator.
+Next action: Matt installs the SDK per `docs/TOOLCHAIN.md`, builds v0 in the
+simulator, and reports what breaks. Expect compile errors — nothing here has
+been through a compiler. Items 6-8 and 11 all get answered during that pass.
 
 ---
 
@@ -33,6 +34,8 @@ installed SDK and simulator.
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | Open |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
+| 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | Open - untestable from sandbox |
+| 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | Open - check SDK device list |
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 
 ---
@@ -116,3 +119,16 @@ installed SDK and simulator.
 - Architectural shift: the data field moves from v3 to v2. It is the only surface
   that can alert, and it covers the activity cases the app exists for.
 - Still no code written.
+
+### 2026-09-21 - v0 scaffolded
+- Wrote the v0 project: manifest, jungle, five Monkey C source files, resources,
+  generated launcher icon.
+- v0 is a diagnostic screen: UV index plus position, barometric altitude vs the
+  API's grid elevation, and the HTTP result. Designed so a failure names itself.
+- Chose Open-Meteo's air-quality endpoint over the forecast API: the former
+  serves CAMS erythemal UV, the latter a GFS approximation.
+- Caught and fixed a glance scoping bug before it shipped: the glance is its own
+  build scope and cannot see the app's in-memory singleton, so shared state is
+  storage-backed and the scale helpers are (:glance) annotated.
+- Wrote docs/TOOLCHAIN.md for Windows 11, including MTP sideloading.
+- NOTHING HAS BEEN COMPILED. No Garmin SDK access from this environment.
