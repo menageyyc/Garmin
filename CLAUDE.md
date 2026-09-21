@@ -47,6 +47,10 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
 - Background service memory is the tightest budget in the project (commonly 32 KB).
   Parse and discard; never hold a whole API response.
 - Layouts are resolution-relative, never pixel-hardcoded, so added devices stay cheap.
+- **Local variable types are inferred.** `var x as Float;` is a compile error.
+  Annotate fields, parameters and return types; never locals.
+- A two-part null test (`if (a != null && a.b != null)`) does not narrow `a.b`
+  for the next line. Read the value into a local and test that.
 - Health-adjacent output is presented as an estimate with a margin, never as a
   precise threshold. MED varies widely within every Fitzpatrick type, and the
   type itself is an unreliable self-report.

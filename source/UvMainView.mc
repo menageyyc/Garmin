@@ -46,9 +46,13 @@ class UvMainView extends WatchUi.View {
     private function drawReading(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {
         var uv = state.uvIndex;
 
-        var label as String;
-        var colour as Number;
-        var band as String;
+        // Local variable types are inferred in Monkey C - an explicit "as Type"
+        // on a local is a compile error, unlike on a field or a parameter.
+        // Defaults here are the no-reading case, so each branch only overrides
+        // what actually differs.
+        var label = "--";
+        var colour = Graphics.COLOR_DK_GRAY;
+        var band = "UV INDEX";
 
         if (uv != null) {
             label = uv.format("%.1f");
@@ -57,11 +61,6 @@ class UvMainView extends WatchUi.View {
         } else if (state.requestInFlight) {
             label = "...";
             colour = Graphics.COLOR_LT_GRAY;
-            band = "UV INDEX";
-        } else {
-            label = "--";
-            colour = Graphics.COLOR_DK_GRAY;
-            band = "UV INDEX";
         }
 
         dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
@@ -76,7 +75,7 @@ class UvMainView extends WatchUi.View {
     // The diagnostic stack. Each line answers one question: did GPS work, did
     // the barometer work, did the request work, what did the API assume.
     private function drawDiagnostics(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {
-        var lines = [] as Array<String>;
+        var lines = [];
 
         var lat = state.latitude;
         var lon = state.longitude;
