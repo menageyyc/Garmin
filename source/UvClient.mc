@@ -194,12 +194,15 @@ class UvClient {
         return best < 0 ? 0 : best;
     }
 
-    // JSON values arrive typed as Object, which carries no arithmetic or
-    // conversion methods - hence "Cannot find symbol ':toFloat' on type
-    // '$.Toybox.Lang.Object'". Narrowing explicitly beats casting blind,
-    // because Open-Meteo really does return an integer where a value happens
-    // to be whole and a float otherwise, so both branches get taken.
-    private function asFloat(value as Lang.Object or Null) as Lang.Float or Null {
+    // JSON values carry no arithmetic or conversion methods, hence "Cannot find
+    // symbol ':toFloat'". Narrowing explicitly beats casting blind, because
+    // Open-Meteo really does return an integer where a value happens to be whole
+    // and a float otherwise, so both branches get taken.
+    //
+    // The parameter is Any, not Object: Any is Monkey C's top type and sits
+    // ABOVE Object, so a container lookup - which yields Any - cannot be passed
+    // to something expecting Object.
+    private function asFloat(value as Any) as Lang.Float or Null {
         if (value instanceof Lang.Float)  { return value; }
         if (value instanceof Lang.Double) { return value.toFloat(); }
         if (value instanceof Lang.Number) { return value.toFloat(); }
@@ -207,7 +210,7 @@ class UvClient {
         return null;
     }
 
-    private function asNumber(value as Lang.Object or Null) as Lang.Number or Null {
+    private function asNumber(value as Any) as Lang.Number or Null {
         if (value instanceof Lang.Number) { return value; }
         if (value instanceof Lang.Long)   { return value.toNumber(); }
         return null;
