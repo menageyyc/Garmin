@@ -1,0 +1,4 @@
+This folder exists so the Monkey C extension has somewhere to put built .prg
+files, and so "Select Output Folder" always has an obvious answer.
+
+Build output itself is not tracked - see .gitignore.

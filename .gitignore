@@ -1,5 +1,7 @@
-# Build output
-bin/
+# Build output. The bin folder itself is kept (via .gitkeep) so it exists in a
+# fresh download and the build's "Select Output Folder" prompt has an answer.
+bin/*
+!bin/.gitkeep
 *.prg
 *.prg.debug.xml
 *.iq
