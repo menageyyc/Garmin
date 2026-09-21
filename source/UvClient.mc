@@ -93,9 +93,16 @@ class UvClient {
     private function requestUv() as Void {
         var state = UvState.get();
 
+        var lat = state.latitude;
+        var lon = state.longitude;
+        if (lat == null || lon == null) {
+            fail(null, "No position");
+            return;
+        }
+
         var params = {
-            "latitude"     => state.latitude.format("%.4f"),
-            "longitude"    => state.longitude.format("%.4f"),
+            "latitude"     => lat.format("%.4f"),
+            "longitude"    => lon.format("%.4f"),
             "hourly"       => "uv_index",
             "forecast_days" => "1",
             "timeformat"   => "unixtime"

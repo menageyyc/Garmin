@@ -48,12 +48,17 @@ class UvState {
 
     private static var _instance as UvState or Null = null;
 
+    // Built through a local: returning the field directly gives the checker
+    // "UvState or Null", because it cannot see that the assignment above
+    // guarantees non-null by the time we return.
     public static function get() as UvState {
-        if (_instance == null) {
-            _instance = new UvState();
-            _instance.load();
+        var inst = _instance;
+        if (inst == null) {
+            inst = new UvState();
+            inst.load();
+            _instance = inst;
         }
-        return _instance;
+        return inst;
     }
 
     function initialize() {

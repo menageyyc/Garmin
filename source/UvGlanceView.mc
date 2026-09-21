@@ -23,16 +23,17 @@ class UvGlanceView extends WatchUi.GlanceView {
         dc.clear();
 
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(0, h * 0.10, Graphics.FONT_XTINY, "UV", Graphics.TEXT_JUSTIFY_LEFT);
+        dc.drawText(0, (h * 0.10).toNumber(), Graphics.FONT_XTINY, "UV", Graphics.TEXT_JUSTIFY_LEFT);
 
-        if (state.hasReading()) {
-            dc.setColor(UvScale.colour(state.uvIndex), Graphics.COLOR_TRANSPARENT);
-            dc.drawText(0, h * 0.42, Graphics.FONT_TINY,
-                        state.uvIndex.format("%.1f") + "  " + UvScale.riskBand(state.uvIndex),
+        var uv = state.uvIndex;
+        if (uv != null) {
+            dc.setColor(UvScale.colour(uv), Graphics.COLOR_TRANSPARENT);
+            dc.drawText(0, (h * 0.42).toNumber(), Graphics.FONT_TINY,
+                        uv.format("%.1f") + "  " + UvScale.riskBand(uv),
                         Graphics.TEXT_JUSTIFY_LEFT);
         } else {
             dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(0, h * 0.42, Graphics.FONT_TINY, "--", Graphics.TEXT_JUSTIFY_LEFT);
+            dc.drawText(0, (h * 0.42).toNumber(), Graphics.FONT_TINY, "--", Graphics.TEXT_JUSTIFY_LEFT);
         }
     }
 }
