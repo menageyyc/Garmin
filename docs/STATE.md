@@ -242,3 +242,16 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
   so both branches are genuinely taken. Also applied to the unixtime comparison
   in currentHourIndex, which had the same latent problem.
 - Did NOT lower typeCheckLevel. The strict checker caught real looseness.
+
+### 2026-09-21 - One-click updates
+- The ZIP re-download loop was too tedious to sustain; Matt is doing this
+  alongside real work and needs updates to be frictionless.
+- Switched to a proper clone: `winget install --id Git.Git -e` then VS Code's
+  Git: Clone. No login needed, repo is public and the working branch is default.
+- Added `update.bat` at the repo root - double-click to pull, with plain-language
+  output on success or failure. Deliberately not a script that needs a terminal.
+- Tracked `.vscode/settings.json` (gitignore narrowed to allow it) carrying
+  git.autofetch so the status bar surfaces new commits, git.confirmSync off, and
+  monkeyC.typeCheckLevel Strict so the checker stays strict across machines.
+- launch.json deliberately NOT tracked - the extension generates it per machine
+  and Matt's working one should not be overwritten.

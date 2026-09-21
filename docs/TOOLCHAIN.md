@@ -148,26 +148,43 @@ not a sign anything is broken.
 
 ## 3b. Get the code onto your machine
 
-The repo is **public** and the working branch is the **default** branch, so
-there is nothing to log into and no branch to switch.
+Do this once. Afterwards, updating is a double-click.
 
-**Simplest route, no git needed:**
+**Install git** — open PowerShell (Start → type "PowerShell" → Enter) and run:
 
-1. Go to **https://github.com/menageyyc/Garmin**
-2. Click the green **Code** button → **Download ZIP**
-3. Right-click the downloaded ZIP → **Extract All**. Put it somewhere sensible
-   like `C:\Users\matt\Garmin`
-4. In VS Code: **File → Open Folder**, and pick the extracted folder — the one
-   containing `manifest.xml`, not its parent
+```powershell
+winget install --id Git.Git -e --source winget
+```
 
-To get later updates this way you re-download and replace the folder. Fine for
-a first build; if we end up iterating, ask and I will set up the one-click
-update instead.
+winget ships with Windows 11, so nothing to download first. Accept the UAC
+prompt if it appears. **Then fully quit and reopen VS Code** so it picks up the
+new PATH.
 
-> **What "cloning" means**, since it came up: it downloads the project *and*
-> keeps it linked to GitHub, so updates arrive with one click instead of a
-> re-download. It needs Git for Windows installed and is worth doing once the
-> build works — not before.
+**Clone the repo** — in VS Code:
+
+1. `Ctrl+Shift+P` → **Git: Clone**
+2. Paste `https://github.com/menageyyc/Garmin.git`
+3. Choose a parent folder — something short like `C:\Users\matt\dev`. Git
+   creates the `Garmin` folder inside it, so do not make one yourself
+4. When it asks, choose **Open** to switch to the cloned folder
+
+The repo is public, so no login is needed, and the working branch is the repo's
+default branch, so there is nothing to switch to.
+
+**Delete the old ZIP folder** once the clone works, so there is no confusion
+about which copy is live.
+
+### Updating afterwards
+
+Three ways, all equivalent — use whichever you remember:
+
+- **Double-click `update.bat`** in the project folder. Prints whether it worked.
+- **Click the sync icon** in VS Code's bottom-left status bar, beside the branch
+  name. `.vscode/settings.json` enables autofetch, so a "↓1" appears there
+  within a few minutes of a push.
+- `Ctrl+Shift+P` → **Git: Pull**
+
+Then press **F5**. No more re-downloading, no more copying folders.
 
 ## 4. Build and run in the simulator
 

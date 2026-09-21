@@ -12,5 +12,8 @@ bin/*
 *.pem
 developer_key*
 
-# Editor
-.vscode/
+# Editor. settings.json IS tracked - it carries the autofetch and type-check
+# settings the project wants. launch.json is not, since the Monkey C extension
+# generates it per machine.
+.vscode/*
+!.vscode/settings.json

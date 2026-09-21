@@ -1,0 +1,14 @@
+{
+    // Check GitHub for new commits periodically, so the sync indicator in the
+    // status bar shows when there is something to pull rather than you having
+    // to go looking.
+    "git.autofetch": true,
+    "git.autofetchPeriod": 180,
+
+    // Confirming every pull gets old fast on a project with one contributor.
+    "git.confirmSync": false,
+
+    // Leave the Monkey C type checker strict. It has already caught real bugs
+    // in this project; the noise it produces is worth the errors it prevents.
+    "monkeyC.typeCheckLevel": "Strict"
+}

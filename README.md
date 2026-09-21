@@ -6,6 +6,11 @@ a personalised MED.
 
 **Status:** v0 — toolchain smoke test. Target: epix Pro (Gen 2) 47 mm.
 
+## Updating
+
+Double-click **`update.bat`**, or click the sync icon in VS Code's status bar.
+Then press F5.
+
 ## Start here
 
 - **[docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)** — SDK install, developer key,
