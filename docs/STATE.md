@@ -26,7 +26,7 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 |---|---|---|---|
 | 1 | Epix Pro size | First build target | **Answered: 47 mm (416x416)** |
 | 2 | User's OS | SDK install + signing key | **Answered: Windows** |
-| 3 | User's Fitzpatrick type | Default MED seed | **Answered: Type II (~250 J/m2)** |
+| 3 | User's Fitzpatrick type | Default MED seed | **Supplied: type II (~250 J/m2) - UNRELIABLE self-report, re-derive in settings** |
 | 4 | Sun detection method | v2 design | **Answered: activity + manual session** |
 | 5 | Store-published or sideload-only | Review, health wording, licence | Open |
 | 6 | CIQ system version (Settings > System > About) | Target API level | Open |
@@ -62,6 +62,10 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | 2026-09-21 | Session launched via glance carousel + toggle-on-launch | Hotkey targets exclude CIQ apps; glance input delegates are not invoked during glance view. 2-3 presses |
 | 2026-09-21 | Data field moves from v3 to v2 | It is the only surface that can vibrate, and it covers ski/run/paddle - the cases the app exists for |
 | 2026-09-21 | Native repeating timer documented as opt-in, not a feature | Clock > Timer > Restart On vibrates and chirps until a button press, but the app can neither start nor stop it |
+| 2026-09-21 | Never ask for a Fitzpatrick numeral; ask the two behavioural questions | Self-report has no significant correlation with measured MED; 42% are unclassifiable |
+| 2026-09-21 | Personal MED is a stored moving value, calibrated from burn outcomes | The questionnaire only seeds it. Asking "did you burn?" after a session beats any survey |
+| 2026-09-21 | Burn time displayed as a range, never a single figure | A precise number from an imprecise input misleads |
+| 2026-09-21 | Native short repeating timer recommended for tan mode rotation | 10-15 min. The nag is wanted there, and short sessions bound the can't-stop-it flaw |
 
 ---
 
@@ -81,7 +85,8 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | Hotkey to toggle the session | Connect IQ apps are not assignable hotkey targets on Epix Pro. Confirmed on the device |
 | App sets a system timer or alarm | No Connect IQ API exists. The API can read alarm count only |
 | Tap the glance to toggle the session | Input delegate methods are not invoked while a glance view is running |
-| Native repeating timer as a default | The app cannot stop it either, so it keeps buzzing after the session ends |
+| Native repeating timer as a default in protect mode | The app cannot stop it either, so it keeps buzzing after the session ends. Fine in tan mode, where sessions are short |
+| Fitzpatrick roman-numeral dropdown | Produces an authoritative-looking number that predicts almost nothing |
 
 ---
 
@@ -132,3 +137,17 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
   storage-backed and the scale helpers are (:glance) annotated.
 - Wrote docs/TOOLCHAIN.md for Windows 11, including MTP sideloading.
 - NOTHING HAS BEEN COMPILED. No Garmin SDK access from this environment.
+
+### 2026-09-21 - Skin type reconsidered
+- Matt asked how a user is supposed to know their Fitzpatrick type. Researched it:
+  self-report has NO significant correlation with measured MED, only 41% of people
+  are classifiable from the standard questionnaire, and 42% of responses cannot be
+  classified at all.
+- Redesigned: two behavioural questions instead of a numeral, "not sure" as a
+  first-class answer, conservative seed, burn time shown as a range, and
+  calibration from actual burn outcomes. Personal MED becomes a moving value.
+- Corrected the record: type II was supplied by Matt, not inferred by Claude, but
+  it is an unreliable self-report and is no longer recorded as settled.
+- Added rotation guidance to tan mode: short repeating native timer, and the
+  arithmetic note that alternating sides roughly halve per-site dose while face
+  and shoulders take the full amount.

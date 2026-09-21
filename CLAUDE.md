@@ -34,6 +34,12 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
 6. **This sandbox cannot reach Garmin or Open-Meteo.** Egress policy blocks
    `developer.garmin.com`, `apps.garmin.com` and `api.open-meteo.com`. Source is
    written here; compiling, simulating and sideloading happen on the user's machine.
+7. **Never ask the user for a Fitzpatrick numeral.** Self-reported skin type has
+   no significant correlation with measured MED, and ~42% of people cannot be
+   classified from the standard questions at all. Ask the two behavioural
+   questions, offer "not sure", seed conservatively, show burn time as a range,
+   and calibrate from whether the user actually burned. Personal MED is a stored
+   moving value, not a lookup from a type.
 
 ## Conventions
 
@@ -42,7 +48,10 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
   Parse and discard; never hold a whole API response.
 - Layouts are resolution-relative, never pixel-hardcoded, so added devices stay cheap.
 - Health-adjacent output is presented as an estimate with a margin, never as a
-  precise threshold. MED varies widely within every Fitzpatrick type.
+  precise threshold. MED varies widely within every Fitzpatrick type, and the
+  type itself is an unreliable self-report.
+- Matt's stated type II is a starting assumption, not a settled fact. Do not
+  treat it as calibrated.
 
 ## Working style
 
