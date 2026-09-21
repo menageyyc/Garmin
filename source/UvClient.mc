@@ -199,10 +199,18 @@ class UvClient {
     // Open-Meteo really does return an integer where a value happens to be whole
     // and a float otherwise, so both branches get taken.
     //
-    // The parameter is Any, not Object: Any is Monkey C's top type and sits
-    // ABOVE Object, so a container lookup - which yields Any - cannot be passed
-    // to something expecting Object.
-    private function asFloat(value as Any) as Lang.Float or Null {
+    // (:typecheck(false)) is the honest resolution to a genuine dead end, not a
+    // shortcut. Container lookups yield Any, Monkey C's top type. Any sits above
+    // Object, so it cannot be passed to a parameter declared Object. But Any has
+    // no writable name either - it is what an untyped parameter already is, and
+    // spelling it draws "Cannot resolve type 'Any'". Strict mode meanwhile
+    // insists every parameter carry a type. There is no annotation that
+    // satisfies both, and these two functions exist precisely to inspect a value
+    // whose type is unknown until runtime, which is the one job a static checker
+    // cannot do. Both return fully typed values, so nothing downstream loses
+    // checking.
+    (:typecheck(false))
+    private function asFloat(value) as Lang.Float or Null {
         if (value instanceof Lang.Float)  { return value; }
         if (value instanceof Lang.Double) { return value.toFloat(); }
         if (value instanceof Lang.Number) { return value.toFloat(); }
@@ -210,7 +218,8 @@ class UvClient {
         return null;
     }
 
-    private function asNumber(value as Any) as Lang.Number or Null {
+    (:typecheck(false))
+    private function asNumber(value) as Lang.Number or Null {
         if (value instanceof Lang.Number) { return value; }
         if (value instanceof Lang.Long)   { return value.toNumber(); }
         return null;

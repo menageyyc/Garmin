@@ -51,8 +51,11 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
   Annotate fields, parameters and return types; never locals.
 - A two-part null test (`if (a != null && a.b != null)`) does not narrow `a.b`
   for the next line. Read the value into a local and test that.
-- `Any` sits **above** `Object` in the type lattice. Dictionary and Array lookups
-  yield `Any`, so a helper receiving one must declare `as Any`, not `as Object`.
+- `Any` sits **above** `Object`. Dictionary and Array lookups yield `Any`, which
+  therefore cannot be passed to a parameter declared `Object`. `Any` also has no
+  writable name (`as Any` gives "Cannot resolve type"), while strict mode demands
+  every parameter be typed. For a function that inspects an unknown value at
+  runtime, the resolution is `(:typecheck(false))` on that function alone.
 - Health-adjacent output is presented as an estimate with a margin, never as a
   precise threshold. MED varies widely within every Fitzpatrick type, and the
   type itself is an unreliable self-report.
