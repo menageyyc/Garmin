@@ -9,15 +9,18 @@ import Toybox.Time;
 // Application.Storage. The app fetches and writes; the glance only reads.
 // Getting this wrong is the usual reason a glance shows stale or empty data
 // while the app looks fine.
+// Where the fix came from, so a failure is diagnosable at a glance. Declared at
+// file scope rather than inside the class - Monkey C is reliable about enums
+// here, less so nested in a class body.
+(:glance)
+enum FixSource {
+    FIX_NONE = 0,
+    FIX_CACHED = 1,     // Position.getInfo(), free, possibly old
+    FIX_LIVE = 2        // a real one-shot acquisition
+}
+
 (:glance)
 class UvState {
-
-    // Where the fix came from, so a failure is diagnosable at a glance.
-    enum FixSource {
-        FIX_NONE = 0,
-        FIX_CACHED = 1,     // Position.getInfo(), free, possibly old
-        FIX_LIVE = 2        // a real one-shot acquisition
-    }
 
     private const KEY_UV       = "uv";
     private const KEY_UV_AT    = "uvAt";

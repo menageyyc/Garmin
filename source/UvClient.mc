@@ -44,7 +44,7 @@ class UvClient {
             if (!(deg[0] == 0.0 && deg[1] == 0.0)) {
                 state.latitude = deg[0].toFloat();
                 state.longitude = deg[1].toFloat();
-                state.fixSource = UvState.FIX_CACHED;
+                state.fixSource = FIX_CACHED;
                 requestUv();
                 return;
             }
@@ -69,7 +69,7 @@ class UvClient {
         var deg = info.position.toDegrees();
         state.latitude = deg[0].toFloat();
         state.longitude = deg[1].toFloat();
-        state.fixSource = UvState.FIX_LIVE;
+        state.fixSource = FIX_LIVE;
 
         // GPS altitude as a fallback if the barometer gave us nothing.
         if (state.watchAltitude == null && info.altitude != null) {

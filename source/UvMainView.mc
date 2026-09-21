@@ -72,7 +72,7 @@ class UvMainView extends WatchUi.View {
 
         if (state.hasPosition()) {
             lines.add(state.latitude.format("%.2f") + ", " + state.longitude.format("%.2f")
-                      + (state.fixSource == UvState.FIX_CACHED ? " (cached)" : ""));
+                      + (state.fixSource == FIX_CACHED ? " (cached)" : ""));
         } else {
             lines.add("No position");
         }
