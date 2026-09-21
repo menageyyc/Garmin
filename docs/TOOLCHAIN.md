@@ -12,10 +12,32 @@ see "Why Android helps" below).
 2. Sign in with a Garmin account (free — the same one your watch uses is fine).
 3. In the SDK Manager, download the **latest SDK**. When it asks whether to make
    it the active SDK, say yes.
-4. Still in the SDK Manager, open the **Devices** tab and download
-   **epix Pro (Gen 2) 47mm**. The simulator cannot emulate a device you have not
-   downloaded, and the compiler cannot target one either.
+4. Still in the SDK Manager, open the **Devices** tab. Devices are grouped by
+   **API level**, and each group shows how many are installed — by default most
+   are not. Expand the groups, find **epix Pro (Gen 2) 47mm**, and install it.
+
+   > The simulator cannot emulate a device you have not downloaded, and the
+   > compiler cannot target one either. This is the most common reason a first
+   > build fails.
+
+   While you are there, **note which API level group epix Pro appears under**.
+   That is the device's real API level and it tells us what the app may use.
 5. Close the SDK Manager.
+
+### Where the platform is, September 2026
+
+The Devices tab goes up to **API level 6.0**, which is Connect IQ 9 (SDK 9.2.0,
+June 2026). The devices that support Connect IQ 9 are the Fenix 8 family,
+Fenix E, Enduro 3, Forerunner 570 and 970, Venu 4, Venu X1, vivoactive 6 and
+D2 Mach 2 Pro, plus several Edge units.
+
+**epix Pro (Gen 2) is not one of them.** It is a 2023 device and sits lower,
+probably in the 5.x group. Install the newest SDK anyway — a current SDK still
+builds for older API levels — but do not reach for a Connect IQ 9 API and expect
+this watch to run it.
+
+The manifest sets `minApiLevel` to 3.3.0, the floor for glance support. That is
+deliberately permissive and needs no change unless we want a specific newer API.
 
 ## 2. Install the VS Code extension
 
@@ -112,6 +134,7 @@ with.
 
 - [ ] Is the manifest product id `epix2pro47mm` correct? Fix it in `manifest.xml`
       if the SDK's device list disagrees. Nothing else depends on it.
+- [ ] Which API level group does epix Pro sit under in the SDK Manager?
 - [ ] Does `air-quality-api.open-meteo.com` return a UV value? This could not be
       tested from Claude's sandbox — egress to Open-Meteo is blocked there. If it
       fails, the fallback is the main forecast API, whose `uv_index` comes from

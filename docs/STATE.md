@@ -29,7 +29,7 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | 3 | User's Fitzpatrick type | Default MED seed | **Supplied: type II (~250 J/m2) - UNRELIABLE self-report, re-derive in settings** |
 | 4 | Sun detection method | v2 design | **Answered: activity + manual session** |
 | 5 | Store-published or sideload-only | Review, health wording, licence | Open |
-| 6 | CIQ system version (Settings > System > About) | Target API level | Open |
+| 6 | Which API level group does epix Pro sit under in the SDK Manager? | Target API level | Open - expand the Devices tab groups |
 | 7 | App + glance + background memory budgets, from local SDK | Architecture limits | Open |
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | Open |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
@@ -66,6 +66,8 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | 2026-09-21 | Personal MED is a stored moving value, calibrated from burn outcomes | The questionnaire only seeds it. Asking "did you burn?" after a session beats any survey |
 | 2026-09-21 | Burn time displayed as a range, never a single figure | A precise number from an imprecise input misleads |
 | 2026-09-21 | Native short repeating timer recommended for tan mode rotation | 10-15 min. The nag is wanted there, and short sessions bound the can't-stop-it flaw |
+| 2026-09-21 | Keep minApiLevel at 3.3.0 | Permissive, and epix Pro is well above it. Raise only for a specific newer API |
+| 2026-09-21 | Target the 5.x-era API surface, not Connect IQ 9 | Epix Pro (Gen 2) is a 2023 device and is not a CIQ 9 device |
 
 ---
 
@@ -151,3 +153,15 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 - Added rotation guidance to tan mode: short repeating native timer, and the
   arithmetic note that alternating sides roughly halve per-site dose while face
   and shoulders take the full amount.
+
+### 2026-09-21 - Platform version corrected
+- Matt's SDK Manager screenshot shows API levels up to 6.0. Earlier research in
+  this session treated System 7 / API 5.0 as the ceiling; that is now outdated.
+- API 6.0 = Connect IQ 9. SDK 9.2.0 shipped June 2026. System 8 exists too.
+- CIQ 9 devices are Fenix 8 family, Fenix E, Enduro 3, FR 570/970, Venu 4,
+  Venu X1, vivoactive 6, D2 Mach 2 Pro and some Edge units. Epix Pro (Gen 2) is
+  NOT among them - it is a 2023 device, probably in the 5.x group.
+- Practical consequence: install the newest SDK (it still builds for older API
+  levels) but do not reach for CIQ 9 APIs. minApiLevel stays at 3.3.0.
+- Noted that the Devices tab installs partially by default - epix Pro 47mm must
+  be explicitly installed or neither the simulator nor the compiler can target it.
