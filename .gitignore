@@ -1,0 +1,14 @@
+# Build output
+bin/
+*.prg
+*.prg.debug.xml
+*.iq
+
+# Developer key - NEVER commit this. There is no way to recover it,
+# and without it you cannot update a published app.
+*.der
+*.pem
+developer_key*
+
+# Editor
+.vscode/
