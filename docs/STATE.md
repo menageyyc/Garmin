@@ -14,7 +14,8 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 Next action: scaffold the v0 project skeleton (manifest targeting epix Pro 47 mm,
 resources, one view) and get the Windows toolchain proven end to end on the
-user's machine. Blocking items 6-8 are all read from the locally installed SDK.
+user's machine. Blocking items 6-8 and 11 are all answered from the locally
+installed SDK and simulator.
 
 ---
 
@@ -30,7 +31,8 @@ user's machine. Blocking items 6-8 are all read from the locally installed SDK.
 | 6 | CIQ system version (Settings > System > About) | Target API level | Open |
 | 7 | App + glance + background memory budgets, from local SDK | Architecture limits | Open |
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | Open |
-| 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Whether the hotkey toggle survives | Open |
+| 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
+| 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 
 ---
@@ -54,6 +56,9 @@ user's machine. Blocking items 6-8 are all read from the locally installed SDK.
 | 2026-09-21 | UPF applied near face value, derated 30-50% when wet | UPF is a fabric property measured by spectrophotometer; no human application variable |
 | 2026-09-21 | Protect / Tan / Vitamin D as explicit modes | The three goals have genuinely conflicting optimal timing |
 | 2026-09-21 | Tan mode caps at 0.5-0.75 MED, shows time to cap not time to burn | Burning is counterproductive even cosmetically; peeling sheds the pigment being built |
+| 2026-09-21 | Session launched via glance carousel + toggle-on-launch | Hotkey targets exclude CIQ apps; glance input delegates are not invoked during glance view. 2-3 presses |
+| 2026-09-21 | Data field moves from v3 to v2 | It is the only surface that can vibrate, and it covers ski/run/paddle - the cases the app exists for |
+| 2026-09-21 | Native repeating timer documented as opt-in, not a feature | Clock > Timer > Restart On vibrates and chirps until a button press, but the app can neither start nor stop it |
 
 ---
 
@@ -70,6 +75,10 @@ user's machine. Blocking items 6-8 are all read from the locally installed SDK.
 | Hourly checkpoint interval | Too slow at high UV. One forgotten hour at UVI 8 books ~2.9 MED of phantom dose for type II |
 | "Tan in the shoulder hours for better efficiency" | Delayed tanning shares a near-identical action spectrum with erythema. Shoulder hours tan you *less*, not more efficiently |
 | Applying label SPF at face value | Real-world application is 0.25-0.5x the tested 2 mg/cm2, and the relationship is exponential |
+| Hotkey to toggle the session | Connect IQ apps are not assignable hotkey targets on Epix Pro. Confirmed on the device |
+| App sets a system timer or alarm | No Connect IQ API exists. The API can read alarm count only |
+| Tap the glance to toggle the session | Input delegate methods are not invoked while a glance view is running |
+| Native repeating timer as a default | The app cannot stop it either, so it keeps buzzing after the session ends |
 
 ---
 
@@ -94,4 +103,16 @@ user's machine. Blocking items 6-8 are all read from the locally installed SDK.
 - Added UPF and SPF protection inputs with the derating asymmetry between them.
 - Added Protect / Tan / Vitamin D modes, with the action-spectrum correction that
   lasting tan cannot be meaningfully decoupled from burn risk.
+- Still no code written.
+
+### 2026-09-21 - Alerting surfaces resolved
+- Hotkey confirmed dead on the device: CIQ apps are not assignable hotkey targets.
+- Confirmed no Connect IQ API to set a system timer or alarm.
+- Confirmed a glance cannot be tapped to toggle; input delegates are not invoked
+  during glance view. Launch path is glance carousel -> select -> toggle-on-launch.
+- Found that Garmin's native countdown timer with Restart On does exactly what was
+  wanted (persistent vibrate + chirp until acknowledged), but the app can neither
+  start nor stop it, so it is opt-in guidance rather than a feature.
+- Architectural shift: the data field moves from v3 to v2. It is the only surface
+  that can alert, and it covers the activity cases the app exists for.
 - Still no code written.
