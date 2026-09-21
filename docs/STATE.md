@@ -200,3 +200,13 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
   section: CLAUDE.md and docs/STATE.md are authoritative, rejected approaches
   must not be re-suggested, and disagreement should be raised with the user
   rather than acted on silently.
+
+### 2026-09-21 - Developer key clarification
+- Matt expected to be issued a developer key during SDK install and was looking
+  for one that was never going to appear. The key is self-generated via
+  `Monkey C: Generate a Developer Key`, not issued by Garmin.
+- `Monkey C: Verify Installation` checks SDK + Java + developer key, so it fails
+  until the key is generated. That failure is expected, not a fault.
+- Rewrote the TOOLCHAIN.md section to say plainly that you create the key, and to
+  scope the "never lose it" warning: irrelevant for sideloading, critical only if
+  the app is ever published to the store.

@@ -111,15 +111,33 @@ six or more actual products.
 
 ## 3. Generate your developer key
 
+**Garmin does not issue you a key. You create one yourself.** Nothing during the
+SDK install hands you a key, and there is no account page to fetch one from — if
+you were waiting for one to appear, it never will. Every Connect IQ app is
+signed with your own RSA 4096-bit private key, and this step makes it.
+
 `Ctrl+Shift+P` → **Monkey C: Generate a Developer Key**
 
-This creates the key and sets its path in the extension settings automatically.
+It asks where to save. **Choose somewhere outside this repository** — something
+like `C:\Users\<you>\.garmin\developer_key.der`. The extension then sets the
+path in its own settings automatically, so there is nothing further to configure.
 
-> **Back this file up somewhere safe, outside this repo.** There is no way to
-> recover it. If you ever publish to the store and then lose the key, you can
-> never update that app again — you would have to publish a new listing and
-> lose your users. `.gitignore` already excludes key files so you cannot commit
-> it by accident.
+`Monkey C: Verify Installation` checks for this key along with the SDK and Java,
+so it will fail until the key exists. That failure is expected before this step,
+not a sign anything is broken.
+
+> **How much does losing it actually matter?** It depends entirely on whether
+> you publish.
+>
+> - **Sideloading only:** near enough zero. Generate a new one and carry on.
+> - **Published to the store:** the key identifies your app listing. Lose it and
+>   you can never update that app again — you would have to publish a new
+>   listing and abandon your users.
+>
+> Since you cannot know today whether this app gets published later, back the
+> file up somewhere outside the repo. It costs nothing now and cannot be
+> recovered later. `.gitignore` already excludes `*.der` so it cannot be
+> committed by accident.
 
 ## 4. Build and run in the simulator
 
