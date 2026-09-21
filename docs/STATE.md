@@ -87,6 +87,7 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | Hotkey to toggle the session | Connect IQ apps are not assignable hotkey targets on Epix Pro. Confirmed on the device |
 | App sets a system timer or alarm | No Connect IQ API exists. The API can read alarm count only |
 | Tap the glance to toggle the session | Input delegate methods are not invoked while a glance view is running |
+| Concluding the SDK is broken because `spawn java ENOENT` appears | That error means no JVM on PATH. The toolchain is Java-based; install a JDK |
 | Concluding the SDK is missing because `monkeyc` fails in a terminal | The SDK Manager does not put its bin folder on PATH. Verify via the VS Code extension instead |
 | Native repeating timer as a default in protect mode | The app cannot stop it either, so it keeps buzzing after the session ends. Fine in tan mode, where sessions are short |
 | Fitzpatrick roman-numeral dropdown | Produces an authoritative-looking number that predicts almost nothing |
@@ -187,3 +188,15 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 - Added `.github/copilot-instructions.md` as a thin pointer to CLAUDE.md and this
   file, so Copilot stops contradicting settled constraints. Deliberately a
   pointer rather than a copy, to avoid the two files drifting apart.
+
+### 2026-09-21 - Java prerequisite
+- Monkey C extension failed with `spawn java ENOENT`. Cause: the compiler and
+  language server are Java programs and no JVM was on PATH.
+- Fix: Eclipse Temurin JDK 21 (LTS), with "Add to PATH" and "Set JAVA_HOME"
+  explicitly enabled in the installer, then a full VS Code restart.
+- This was a gap in docs/TOOLCHAIN.md, which listed the SDK but not Java. Added
+  as step 0.
+- Strengthened .github/copilot-instructions.md with an explicit precedence
+  section: CLAUDE.md and docs/STATE.md are authoritative, rejected approaches
+  must not be re-suggested, and disagreement should be raised with the user
+  rather than acted on silently.

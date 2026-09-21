@@ -5,6 +5,35 @@ see "Why Android helps" below).
 
 ---
 
+## 0. Install Java first
+
+**The Monkey C compiler and language server are both Java programs.** Without a
+JVM on PATH the extension fails at startup with:
+
+```
+Monkey C Language Server client: couldn't create connection to server.
+Launching server using command java failed. Error: spawn java ENOENT
+```
+
+`ENOENT` means the `java` executable was not found. It says nothing about the
+SDK.
+
+1. Install **[Eclipse Temurin JDK 21 (LTS)](https://adoptium.net/)**, Windows
+   x64. Temurin is the standard free build; Oracle's JDK carries licensing
+   conditions you do not need. Garmin's documented floor is Java 8 or higher, so
+   a current LTS is comfortably above it.
+2. **In the installer, explicitly enable "Add to PATH" and "Set JAVA_HOME
+   variable".** On Temurin's Windows installer these are optional features and
+   are not always on by default. Missing this is how people install Java and
+   still get `ENOENT`.
+3. **Fully quit and reopen VS Code.** Not "Reload Window" — the process needs to
+   restart to inherit the new PATH.
+4. Verify in a *new* terminal:
+
+   ```
+   java -version
+   ```
+
 ## 1. Install the SDK
 
 1. Go to **https://developer.garmin.com/connect-iq/sdk/** and download the
@@ -78,6 +107,7 @@ six or more actual products.
 3. Restart VS Code.
 4. `Ctrl+Shift+P` → **Monkey C: Verify Installation**. Fix anything it reports
    before going further — it is much easier to debug here than during a build.
+   This step catches the Java problem above, among others.
 
 ## 3. Generate your developer key
 
