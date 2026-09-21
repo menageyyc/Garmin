@@ -8,6 +8,41 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ---
 
+## RESUMING? READ THIS FIRST
+
+**Where things stand:** v0 compiles clean and runs in the simulator. The whole
+toolchain is proven. No runtime behaviour has been confirmed yet.
+
+**The immediate next action** is to verify the runtime path in the simulator:
+
+1. Allow the Windows Firewall prompt for `simulator.exe` (blocking it makes
+   every web request fail in a way that looks like an API fault)
+2. Set a simulated GPS position via the simulator's **Simulation** menu - it has
+   no GPS, so without this the app correctly shows "No position"
+3. Read the three diagnostic lines on screen: position, altitude vs the API's
+   grid elevation, and the HTTP result
+
+**What that settles:** whether `air-quality-api.open-meteo.com` actually returns
+UV the way the client expects. This has never been testable from Claude's
+sandbox - egress to Open-Meteo is blocked there - so it is the single largest
+unverified assumption in the project. If it fails, the fallback is the main
+forecast API, whose `uv_index` comes from GFS rather than CAMS, and `BASE_URL`
+in `source/UvClient.mc` is the only line that changes.
+
+**After that works:** v1 per the build plan - altitude and albedo correction,
+colour bands, glance, background refresh with caching, settings.
+
+**Do not re-litigate** anything in `CLAUDE.md`'s hard constraints or the
+"Rejected approaches" table below. Each was researched against primary sources
+and cost real time to establish.
+
+**Working with Matt:** he is technically fluent but does not write code. Explain
+reasoning in plain language. He builds and tests on his own Windows machine -
+Claude's sandbox cannot reach Garmin or Open-Meteo. He pulls changes by
+double-clicking `update.bat`, so push to the branch and tell him to run it.
+
+---
+
 ## Current phase
 
 **v0 BUILDS AND RUNS.** Compiles clean and launches in the simulator on
