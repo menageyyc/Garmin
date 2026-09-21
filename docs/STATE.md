@@ -219,3 +219,12 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 - Flagged that renaming the developer key file breaks the extension's stored
   path. Matt renamed his to garmindeveloper_key, so the setting needs re-pointing
   via "Select existing developer key".
+
+### 2026-09-21 - Build flow notes
+- "Build for Device" asks for an output folder BEFORE the device. TOOLCHAIN.md
+  did not mention the output folder step at all; added.
+- The folder must be OPEN as a VS Code workspace. Browsing to it in a file dialog
+  is not the same thing, and if no workspace is open the device picker never
+  appears. Added as the leading warning in step 4.
+- ZIP extracts nest one level deep, so the folder to open is
+  garmin\Garmin-claude-garmin-uv-tracking-app-7y6gk6\, not garmin\.

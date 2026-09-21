@@ -171,9 +171,29 @@ update instead.
 
 ## 4. Build and run in the simulator
 
-1. Open this folder in VS Code.
-2. `Ctrl+Shift+P` → **Monkey C: Build for Device**, or press the run/play button.
-3. Pick **epix Pro (Gen 2) 47mm** when prompted.
+**Open the project folder first.** This is the step that silently breaks
+everything else. VS Code must have the folder *open as a workspace* — browsing
+to it inside a file dialog is not the same thing. If the welcome tab still says
+"You have no recent folders", no project is open and the build has nothing to
+work on.
+
+1. **File → Open Folder**, and pick the extracted repo folder — the one
+   containing `manifest.xml`, `monkey.jungle`, `source` and `resources`.
+   A ZIP usually extracts into a nested folder, so you may need to go one level
+   in: `garmin\Garmin-claude-garmin-uv-tracking-app-7y6gk6\`, not `garmin\`.
+2. Confirm the file list in the left sidebar shows `manifest.xml` and
+   `monkey.jungle` at the top level. If it does not, you opened the wrong folder.
+3. `Ctrl+Shift+P` → **Monkey C: Build for Device**.
+4. It asks two things in turn:
+   - **Select Output Folder** — where to put the built `.prg`. Use `bin` inside
+     the project (create it if the dialog offers "New folder"). `.gitignore`
+     already excludes `bin/`.
+   - **Device** — pick **epix Pro (Gen 2) 47mm**.
+5. If the device prompt never appears, the extension has not recognised the
+   project. That is almost always the folder problem in step 1.
+
+To run in the simulator instead of producing a file, press **F5**. That is the
+faster loop and where most work should happen.
 
 The simulator does everything the watch does except be on your wrist, and it is
 where you should spend most of your time. You can feed it a fake GPS position
