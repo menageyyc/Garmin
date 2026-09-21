@@ -260,6 +260,16 @@ all. Do not design around that — treat it as a bonus, not a guarantee.
 
 ---
 
+## First run in the simulator
+
+**Windows Firewall will prompt for `simulator.exe`. Allow it.** The simulator
+makes the web request on the app's behalf, so blocking it makes every fetch fail
+in a way that looks like an API fault rather than a firewall.
+
+**Give the simulator a position.** It has no GPS. Use the **Simulation** menu to
+set coordinates, otherwise the app correctly reports "No position" and never
+calls the API.
+
 ## What v0 should show you
 
 The v0 screen is a diagnostic, not a design. It answers four questions at once:

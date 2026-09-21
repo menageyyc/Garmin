@@ -10,12 +10,14 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## Current phase
 
-**v0 compiling on Matt's machine.** Toolchain is working end to end: SDK,
-Java, developer key, device target all confirmed. Fixing compile errors.
+**v0 BUILDS AND RUNS.** Compiles clean and launches in the simulator on
+epix Pro (Gen 2) 47mm / quatix 7 Pro (5.2.0). Now verifying runtime behaviour:
+position, altitude and the Open-Meteo fetch.
 
-Next action: Matt installs the SDK per `docs/TOOLCHAIN.md`, builds v0 in the
-simulator, and reports what breaks. Expect compile errors — nothing here has
-been through a compiler. Items 6-8 and 11 all get answered during that pass.
+Next action: confirm the runtime path in the simulator - set a simulated GPS
+position, allow the firewall prompt, and see whether the Open-Meteo call
+returns a UV value. That settles open question 12, which has never been
+testable from Claude's sandbox.
 
 ---
 
@@ -255,3 +257,14 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
   monkeyC.typeCheckLevel Strict so the checker stays strict across machines.
 - launch.json deliberately NOT tracked - the extension generates it per machine
   and Matt's working one should not be overwritten.
+
+### 2026-09-21 - v0 RUNS
+- Clean compile. App launches in the simulator on epix Pro (Gen 2) 47mm.
+- Compile-error sequence was 19 -> 3 -> 2 -> 2 -> 0, all in Claude's code, all
+  genuine. Three Monkey C typing rules learned the hard way and recorded in
+  CLAUDE.md: locals cannot be annotated, two-part null tests do not narrow, and
+  Any is unnameable while sitting above Object.
+- Windows Firewall prompts for simulator.exe on first run. Must be allowed or
+  makeWebRequest fails in the simulator and looks like an API fault.
+- Toolchain fully proven: SDK 9.2.0, Temurin JDK, developer key, device target,
+  clone-and-pull workflow via update.bat.
