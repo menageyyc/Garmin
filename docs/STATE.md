@@ -210,3 +210,12 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 - Rewrote the TOOLCHAIN.md section to say plainly that you create the key, and to
   scope the "never lose it" warning: irrelevant for sideloading, critical only if
   the app is ever published to the store.
+
+### 2026-09-21 - Non-git workflow added
+- Repo confirmed PUBLIC and the working branch is the repo's DEFAULT branch, so
+  Download ZIP gets the right code with no auth and no branch switching.
+- Added the ZIP route to TOOLCHAIN.md. Matt does not use git; a git tutorial
+  before the first successful build is the wrong order of operations.
+- Flagged that renaming the developer key file breaks the extension's stored
+  path. Matt renamed his to garmindeveloper_key, so the setting needs re-pointing
+  via "Select existing developer key".

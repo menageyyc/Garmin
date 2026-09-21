@@ -126,6 +126,13 @@ path in its own settings automatically, so there is nothing further to configure
 so it will fail until the key exists. That failure is expected before this step,
 not a sign anything is broken.
 
+> **If you move or rename the key file, the stored path breaks.** The extension
+> saved the path when it generated the key, and it does not follow renames.
+> Re-run `Ctrl+Shift+P` → **Monkey C: Set Developer Key** (or the generate
+> command), choose **Select existing developer key**, and browse to the file's
+> new name. Keep the `.der` ending intact — Windows hides file extensions by
+> default, so check via right-click → Properties if unsure.
+
 > **How much does losing it actually matter?** It depends entirely on whether
 > you publish.
 >
@@ -138,6 +145,29 @@ not a sign anything is broken.
 > file up somewhere outside the repo. It costs nothing now and cannot be
 > recovered later. `.gitignore` already excludes `*.der` so it cannot be
 > committed by accident.
+
+## 3b. Get the code onto your machine
+
+The repo is **public** and the working branch is the **default** branch, so
+there is nothing to log into and no branch to switch.
+
+**Simplest route, no git needed:**
+
+1. Go to **https://github.com/menageyyc/Garmin**
+2. Click the green **Code** button → **Download ZIP**
+3. Right-click the downloaded ZIP → **Extract All**. Put it somewhere sensible
+   like `C:\Users\matt\Garmin`
+4. In VS Code: **File → Open Folder**, and pick the extracted folder — the one
+   containing `manifest.xml`, not its parent
+
+To get later updates this way you re-download and replace the folder. Fine for
+a first build; if we end up iterating, ask and I will set up the one-click
+update instead.
+
+> **What "cloning" means**, since it came up: it downloads the project *and*
+> keeps it linked to GitHub, so updates arrive with one click instead of a
+> re-download. It needs Git for Windows installed and is worth doing once the
+> build works — not before.
 
 ## 4. Build and run in the simulator
 
