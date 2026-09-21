@@ -24,20 +24,51 @@ see "Why Android helps" below).
    That is the device's real API level and it tells us what the app may use.
 5. Close the SDK Manager.
 
-### Where the platform is, September 2026
+### Confirmed setup
 
-The Devices tab goes up to **API level 6.0**, which is Connect IQ 9 (SDK 9.2.0,
-June 2026). The devices that support Connect IQ 9 are the Fenix 8 family,
-Fenix E, Enduro 3, Forerunner 570 and 970, Venu 4, Venu X1, vivoactive 6 and
-D2 Mach 2 Pro, plus several Edge units.
+| | |
+|---|---|
+| SDK | Connect IQ **9.2.0** (June 9 2026) |
+| Device | **epix Pro (Gen 2) 47mm / quatix 7 Pro** |
+| Device API level | **5.2** |
+| Manifest `minApiLevel` | **5.2.0** |
 
-**epix Pro (Gen 2) is not one of them.** It is a 2023 device and sits lower,
-probably in the 5.x group. Install the newest SDK anyway — a current SDK still
-builds for older API levels — but do not reach for a Connect IQ 9 API and expect
-this watch to run it.
+The Devices tab goes up to API level 6.0, which is Connect IQ 9. epix Pro sits
+at 5.2 — a current SDK still builds for it, but do not reach for a Connect IQ 9
+API and expect this watch to run it.
 
-The manifest sets `minApiLevel` to 3.3.0, the floor for glance support. That is
-deliberately permissive and needs no change unless we want a specific newer API.
+`minApiLevel` is set to the device's own 5.2 rather than the 3.3.0 glance floor.
+Nothing in v0 needs a 5.x API, but declaring 5.2.0 stops the compiler rejecting
+anything introduced between 3.3 and 5.2 — the `Communications` error constants
+in `UvClient.mc` are the likely candidates. Only one device is targeted, so this
+costs nothing now. When support widens in v3, lower it and add explicit `has`
+checks for what older hardware lacks.
+
+### Confirm the device id
+
+The manifest guesses `epix2pro47mm`. Check it against the SDK's own folder names:
+
+```
+%APPDATA%\Garmin\ConnectIQ\Devices
+```
+
+Each subfolder is named with a device id. In PowerShell:
+
+```powershell
+Get-ChildItem "$env:APPDATA\Garmin\ConnectIQ\Devices" -Directory |
+  Where-Object Name -like "*epix*" | Select-Object Name
+```
+
+If the id differs, change the one line in `manifest.xml`. Nothing else depends
+on it.
+
+### A freebie for later
+
+The Devices list pairs products that share a profile. **epix Pro (Gen 2) 47mm is
+the same target as quatix 7 Pro**, the 51mm covers D2 Mach 1 Pro and tactix 7
+AMOLED, and epix (Gen 2) covers quatix 7 Sapphire. So the v3 widening is cheaper
+than it looks: three resolutions across the epix Pro family (390, 416, 454) reach
+six or more actual products.
 
 ## 2. Install the VS Code extension
 
@@ -132,9 +163,8 @@ with.
 
 ## Known unknowns to check while you are in there
 
-- [ ] Is the manifest product id `epix2pro47mm` correct? Fix it in `manifest.xml`
-      if the SDK's device list disagrees. Nothing else depends on it.
-- [ ] Which API level group does epix Pro sit under in the SDK Manager?
+- [ ] Is the manifest product id `epix2pro47mm` correct? See "Confirm the device
+      id" above. Fix the one line in `manifest.xml` if it differs.
 - [ ] Does `air-quality-api.open-meteo.com` return a UV value? This could not be
       tested from Claude's sandbox — egress to Open-Meteo is blocked there. If it
       fails, the fallback is the main forecast API, whose `uv_index` comes from

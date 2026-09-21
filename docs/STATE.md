@@ -29,9 +29,9 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | 3 | User's Fitzpatrick type | Default MED seed | **Supplied: type II (~250 J/m2) - UNRELIABLE self-report, re-derive in settings** |
 | 4 | Sun detection method | v2 design | **Answered: activity + manual session** |
 | 5 | Store-published or sideload-only | Review, health wording, licence | Open |
-| 6 | Which API level group does epix Pro sit under in the SDK Manager? | Target API level | Open - expand the Devices tab groups |
+| 6 | Which API level group does epix Pro sit under? | Target API level | **Answered: API 5.2. SDK 9.2.0 installed** |
 | 7 | App + glance + background memory budgets, from local SDK | Architecture limits | Open |
-| 8 | Exact manifest device ID for epix Pro 47mm | Manifest | Open |
+| 8 | Exact manifest device ID for epix Pro 47mm | Manifest | Open - check %APPDATA%\Garmin\ConnectIQ\Devices folder names |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
 | 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | Open - untestable from sandbox |
@@ -66,7 +66,7 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
 | 2026-09-21 | Personal MED is a stored moving value, calibrated from burn outcomes | The questionnaire only seeds it. Asking "did you burn?" after a session beats any survey |
 | 2026-09-21 | Burn time displayed as a range, never a single figure | A precise number from an imprecise input misleads |
 | 2026-09-21 | Native short repeating timer recommended for tan mode rotation | 10-15 min. The nag is wanted there, and short sessions bound the can't-stop-it flaw |
-| 2026-09-21 | Keep minApiLevel at 3.3.0 | Permissive, and epix Pro is well above it. Raise only for a specific newer API |
+| 2026-09-21 | Set minApiLevel to 5.2.0, the device's own level | Stops the compiler rejecting APIs introduced between 3.3 and 5.2. Costs nothing with one device targeted. Lower it in v3 and add `has` checks |
 | 2026-09-21 | Target the 5.x-era API surface, not Connect IQ 9 | Epix Pro (Gen 2) is a 2023 device and is not a CIQ 9 device |
 
 ---
@@ -165,3 +165,13 @@ been through a compiler. Items 6-8 and 11 all get answered during that pass.
   levels) but do not reach for CIQ 9 APIs. minApiLevel stays at 3.3.0.
 - Noted that the Devices tab installs partially by default - epix Pro 47mm must
   be explicitly installed or neither the simulator nor the compiler can target it.
+
+### 2026-09-21 - Device and SDK confirmed
+- epix Pro (Gen 2) 47mm is **API level 5.2**. Listed as "epix Pro (Gen 2) 47mm /
+  quatix 7 Pro" - one target covers both products.
+- SDK **9.2.0** (June 9 2026) installed and current. All API 6.0 and 5.2 devices
+  installed.
+- Raised manifest minApiLevel from 3.3.0 to 5.2.0. Rationale recorded above.
+- Device id still to confirm from %APPDATA%\Garmin\ConnectIQ\Devices folder names.
+- Noted for v3: the AMOLED family shares profiles, so three resolutions (390,
+  416, 454) reach six or more products.
