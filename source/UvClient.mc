@@ -38,8 +38,9 @@ class UvClient {
         readAltitude();
 
         var info = Position.getInfo();
-        if (info != null && info.position != null) {
-            var deg = info.position.toDegrees();
+        var cached = (info != null) ? info.position : null;
+        if (cached != null) {
+            var deg = cached.toDegrees();
             // A cached fix at exactly 0,0 means "never had one", not Null Island.
             if (!(deg[0] == 0.0 && deg[1] == 0.0)) {
                 state.latitude = deg[0].toFloat();
@@ -61,19 +62,21 @@ class UvClient {
     public function onPosition(info as Position.Info) as Void {
         var state = UvState.get();
 
-        if (info == null || info.position == null) {
+        var fix = info.position;
+        if (fix == null) {
             fail(null, "No GPS fix");
             return;
         }
 
-        var deg = info.position.toDegrees();
+        var deg = fix.toDegrees();
         state.latitude = deg[0].toFloat();
         state.longitude = deg[1].toFloat();
         state.fixSource = FIX_LIVE;
 
         // GPS altitude as a fallback if the barometer gave us nothing.
-        if (state.watchAltitude == null && info.altitude != null) {
-            state.watchAltitude = info.altitude.toFloat();
+        var gpsAltitude = info.altitude;
+        if (state.watchAltitude == null && gpsAltitude != null) {
+            state.watchAltitude = gpsAltitude.toFloat();
         }
 
         requestUv();
@@ -85,8 +88,9 @@ class UvClient {
     private function readAltitude() as Void {
         var state = UvState.get();
         var activityInfo = Activity.getActivityInfo();
-        if (activityInfo != null && activityInfo.altitude != null) {
-            state.watchAltitude = activityInfo.altitude.toFloat();
+        var altitude = (activityInfo != null) ? activityInfo.altitude : null;
+        if (altitude != null) {
+            state.watchAltitude = altitude.toFloat();
         }
     }
 
@@ -195,7 +199,7 @@ class UvClient {
     // '$.Toybox.Lang.Object'". Narrowing explicitly beats casting blind,
     // because Open-Meteo really does return an integer where a value happens
     // to be whole and a float otherwise, so both branches get taken.
-    private function asFloat(value) as Lang.Float or Null {
+    private function asFloat(value as Lang.Object or Null) as Lang.Float or Null {
         if (value instanceof Lang.Float)  { return value; }
         if (value instanceof Lang.Double) { return value.toFloat(); }
         if (value instanceof Lang.Number) { return value.toFloat(); }
@@ -203,7 +207,7 @@ class UvClient {
         return null;
     }
 
-    private function asNumber(value) as Lang.Number or Null {
+    private function asNumber(value as Lang.Object or Null) as Lang.Number or Null {
         if (value instanceof Lang.Number) { return value; }
         if (value instanceof Lang.Long)   { return value.toNumber(); }
         return null;
