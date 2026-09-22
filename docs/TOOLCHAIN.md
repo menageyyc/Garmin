@@ -282,6 +282,22 @@ no barometric altitude. That is the simulator, not the app and not the
 barometer. To exercise the altitude line as well, use **Simulation → FIT Data →
 Simulate Data**, which supplies position and altitude together.
 
+**The simulator launches the GLANCE, not the app, by default.** This is the
+single most confusing thing about running this project, because the glance
+renders perfectly and then does nothing — which is exactly what it is supposed
+to do. The glance never fetches; it only displays what the app already saved.
+
+How to tell which one you are looking at:
+
+| | Glance | App |
+|---|---|---|
+| Text | small `UV` and `--`, **left-aligned**, near the top | big **centred** number, `UV INDEX`, three diagnostic lines, `START = retry` |
+| Memory readout | around `6.8/59.9kB` | far larger — a watch-app on epix Pro has roughly a megabyte |
+
+**The fix is in the simulator's own menu bar, not VS Code:**
+**Settings → Glance Launch Mode → Launch in Normal Mode.** Then re-run (F5, or
+the restart arrow on VS Code's debug toolbar).
+
 **Press START to refetch.** You do not have to restart the app between
 attempts. The screen shows `START = retry` at the bottom as a reminder.
 

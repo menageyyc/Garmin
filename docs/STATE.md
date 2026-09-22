@@ -22,12 +22,17 @@ diagnostic hardening has been pushed but **not yet compiled** - see the
 2. Set a simulated GPS position via **Settings → Set Position**. Not the
    Simulation menu - this doc said that and was wrong. Without a position the
    app correctly shows "No position" and never calls the API
-3. **Watch the console, not just the screen.** The app now prints the fix and
+3. **Set the simulator to launch the app, not the glance:**
+   **Settings → Glance Launch Mode → Launch in Normal Mode**, in the simulator's
+   own menu bar. It defaults to the glance, which renders correctly and then
+   does nothing - because the glance never fetches. A memory readout near
+   `6.8/59.9kB` and small left-aligned text means you are on the glance
+4. **Watch the console, not just the screen.** The app now prints the fix and
    its quality, the altitude, the outgoing request, and on success a line like
    `UV OK uv=4.35 gridElev=1048 m idx=20/24 slot+1873s`. `gridElev=ABSENT`
    means no `elevation` field came back; `slot+Ns` outside 0-3599 means the UTC
    hour alignment is wrong
-4. **Press START to refetch.** No need to restart the app between attempts
+5. **Press START to refetch.** No need to restart the app between attempts
 
 **Expect `No altitude` in the simulator.** `Activity.getActivityInfo()` is only
 populated while data is being generated or replayed, so *Set Position* alone
@@ -144,6 +149,7 @@ testable from Claude's sandbox.
 | Concluding the SDK is missing because `monkeyc` fails in a terminal | The SDK Manager does not put its bin folder on PATH. Verify via the VS Code extension instead |
 | Native repeating timer as a default in protect mode | The app cannot stop it either, so it keeps buzzing after the session ends. Fine in tan mode, where sessions are short |
 | Fitzpatrick roman-numeral dropdown | Produces an authoritative-looking number that predicts almost nothing |
+| Concluding the app is broken because the simulator shows `--` and does nothing | The simulator launches the glance by default, and the glance never fetches by design. Settings > Glance Launch Mode > Launch in Normal Mode |
 | Gating the fetch on `!hasReading()` | uvIndex is persisted, so one success permanently stopped the app calling the API |
 | Failing the fetch on `QUALITY_NOT_AVAILABLE` | Would block the simulator test for no safety gain. The 0,0 guard is what actually prevents a false positive |
 
@@ -370,3 +376,22 @@ testable from Claude's sandbox.
   v1's forward-looking burn-time curve will need `forecast_days=2`.
 - **NOT COMPILED.** No Garmin SDK in this environment. Every change here is
   unverified against the compiler.
+
+### 2026-09-22 - The hardening compiled, and the glance-launch gotcha
+- **The 39a42c5 changes compile clean.** Problems panel empty and the app runs
+  in the simulator, which it could not do if the build had failed. `Timer`,
+  `Position.QUALITY_*` and `BehaviorDelegate` were the new API surface and all
+  three are fine. That was the open risk from the previous entry; it is closed.
+- **Found why the simulator appeared dead:** it launches the **glance**, not the
+  app. The glance renders correctly and then does nothing, because by design it
+  never fetches - it only shows what the app already persisted. So `--` and no
+  activity is correct glance behaviour, not a fault.
+- Tells: small left-aligned `UV` / `--` near the top, and a memory readout
+  around `6.8/59.9kB`, which is a glance-sized budget rather than a watch-app's.
+- Fix is in the simulator's own menu bar, not VS Code:
+  **Settings → Glance Launch Mode → Launch in Normal Mode**.
+- Recorded in TOOLCHAIN.md with a side-by-side table for telling the two apart.
+- Separately: the empty Chat/Sessions panel in VS Code is not a fault either.
+  Claude sessions run on Anthropic infrastructure, not inside the editor, so
+  that panel will never list this conversation. There is no connection between
+  VS Code and Claude to re-establish; GitHub is the only channel.
