@@ -10,19 +10,36 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## RESUMING? READ THIS FIRST
 
-**v0 IS COMPLETE. v1a IS WRITTEN AND HAS NEVER BEEN COMPILED.**
+**v0 AND v1a ARE BOTH COMPLETE AND CONFIRMED RUNNING** in the simulator on
+2026-09-22.
 
-v0's external dependencies are all proven live in the simulator on 2026-09-22.
-v1 was then split: **v1a** is the foreground half - altitude and albedo
-correction, settings, and the new two-page screen - and it is in the repo
-awaiting its first build. **v1b** is the background service, the cached
-refresh and the glance, and it is not written yet.
+**Two things can happen next, and they are independent:**
 
-**The immediate next action is Matt pressing F5 and reporting what the
-compiler says.** Nothing in v1a has been through a compiler. Expect errors;
-v0's first build was 19 of them.
+1. **A cold review of v1a**, by a model that did not write it. The brief is
+   `docs/REVIEW-BRIEF-v1a.md` and it stands on its own - it does not require
+   reading this file first. Agreed for Claude Fable 5.1, whose brief is
+   deliberately written less prescriptively than this repo's house style,
+   because Anthropic's migration guidance says prompts written for prior models
+   are often too prescriptive on Fable and reduce output quality.
+2. **v1b** - the background service, the 30-minute cached refresh, and the
+   glance rewrite. **Read the 2026-09-22 session log entry on the background
+   architecture before starting it.** Three platform facts established that day
+   contradict the build plan's original architecture diagram: a background
+   service cannot write storage, `onBackgroundData()` fires in the glance too,
+   and GPS from a background process is unreliable. The build plan has been
+   corrected; the diagram in it is now right.
 
-Two runs settled it:
+**What v1a proved, live:** three pages with a page indicator, on-watch settings
+pickers, `HTTP 200`, `idx 15/48` (so `forecast_days=2` took), correct grid
+elevation, UTC alignment holding on a two-day series, and fresh snow on an open
+piste reading `+42% fresh snow`. `Menu2`, `Application.Properties`,
+`catch (e)` and `MenuItem`'s four-argument constructor are all now exercised.
+
+**Memory, measured:** app budget **763.6 kB**, v1a peaks at **23.3 kB** (3%).
+Glance budget ~59.9 kB. **The background budget is still unknown and is the
+only one that constrains anything.**
+
+Two v0 runs settled the data source:
 
 | | Olathe, KS (night) | Bangkok (solar noon) |
 |---|---|---|
@@ -74,17 +91,27 @@ Every value inside 0-3599, and the index advanced exactly when it should.
   does not rebuild and the simulator silently serves the stale `.prg`
 - The build Terminal keeps historical scrollback. Old `19 -> 3 -> 2 -> 2 -> 0`
   errors in it are not current
-- `System.println` goes to the **Debug Console** tab, not Terminal
-
-**Next: compile v1a, then write v1b.** v1b is the background service, the
-30-minute cached refresh and the glance rewrite. Three platform facts it must
-be built around were established on 2026-09-22 and contradict the build plan's
-architecture diagram - see the session log entry for that date before starting
-it.
+- `System.println` goes to the **Debug Console** tab in VS Code, not Terminal
+- **Memory is in the simulator: File -> View Memory.** Peak Memory is the
+  number that matters, not the instantaneous one
+- **`M` on the keyboard opens the app's menu** - `onMenu()` does fire on this
+  device. On real hardware MENU is a long press of UP, still unverified
+- The Settings menu group (Color Mode, Glance Launch Mode, Night Mode...) is
+  **greyed out when no app is loaded**. A failed build looks like a broken menu
+- **Stale-binary tell:** the hint line at the bottom is per-page and short
+  (`START refresh` / `DOWN for settings` / `START to change`), and there are
+  three page dots below it. If it reads `START refresh  MENU set` with the last
+  letter clipped off the screen edge, or there are no dots, the simulator is
+  serving a pre-2026-09-22 `.prg`. Stop the debug session before F5
+- A **blue triangle on black is not this app** - the launcher icon is an orange
+  sun. That is the simulator outside the app, usually after BACK from the
+  reading page, which exits by design. F5 relaunches
 
 **Do not re-litigate** anything in `CLAUDE.md`'s hard constraints or the
 "Rejected approaches" table below. Each was researched against primary sources
-and cost real time to establish.
+and cost real time to establish. (This does not apply to a review session
+working from `docs/REVIEW-BRIEF-v1a.md` - that brief deliberately opens the
+settled decisions to challenge, and says which ones rest on thin evidence.)
 
 **Working with Matt:** technically fluent but does not write code. Explain
 reasoning in plain language. He builds and tests on his own Windows machine -
@@ -97,17 +124,17 @@ pushing elsewhere means he never receives the work.
 
 ## Current phase
 
-**v1a written, not compiled.** v0 is closed: it compiles clean, runs on epix
-Pro (Gen 2) 47mm / quatix 7 Pro (5.2.0), and fetches live UV from Open-Meteo
-over `HTTP 200` at both a night and a daylight position, with correct risk
-bands, colours and grid elevations.
+**v1a COMPLETE.** Builds clean and runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
+(5.2.0). The reading page shows UV corrected for altitude and surface with the
+API's own figure beneath it; the hourly series is cached with the time and
+place it was fetched for, so a failed fetch degrades to "two hours old" rather
+than blanking; surface and surroundings are settable on the watch and from the
+phone; three pages with a page indicator, and BACK returns to the reading page
+rather than quitting.
 
-v1a adds the altitude and albedo correction, a cached hourly series that
-survives a failed fetch, surface and surroundings settings on both the watch
-and the phone, and a two-page screen - the reading first, diagnostics behind
-DOWN.
-
-Next action: **build it and report the errors.** Then v1b.
+Next action: **a cold review of v1a** (`docs/REVIEW-BRIEF-v1a.md`), and **v1b**
+- the background service, cached refresh and glance. Independent of each other;
+either can go first.
 
 ---
 
@@ -828,3 +855,34 @@ answer for this hour, and it never fired.
 - **Not a crash, worth recording as a triage note:** a blue triangle on black
   in the simulator is not this app. The launcher icon is an orange sun. That
   screen is the simulator outside the app; F5 relaunches.
+
+### 2026-09-22 - v1a closed. Review brief written, session handed over
+- BACK fix confirmed. **v1a is complete**: three pages, page indicator,
+  on-watch settings, altitude and albedo correction live, cached series that
+  survives a failed fetch.
+- Wrote `docs/REVIEW-BRIEF-v1a.md` for a cold review by a model that did not
+  write the code. **It is deliberately not written in this repo's house
+  style.** CLAUDE.md and this file are prescriptive - hard constraints, a
+  rejected-approaches table, "do not relitigate" - which has served Opus well.
+  Anthropic's migration guidance is explicit that prompts written for prior
+  models are often too prescriptive on Fable and reduce output quality, so the
+  brief instead:
+  - gives the whole task up front rather than drip-feeding it
+  - states each constraint **with the evidence behind it**, and marks
+    confidence per number, so the reviewer can reason rather than comply
+  - names the places the reasoning is thin and asks to be challenged there
+  - drops the "do not relitigate" framing entirely
+  - is self-contained: it does not require reading this 600-line file first
+- **The confidence table is the point of the brief.** `k_alt = 0.10`, the old
+  snow albedo, the water albedo and all three openness fractions are marked
+  **low** confidence, because they are. Two structural questions are asked
+  outright: whether altitude and albedo are genuinely independent multiplicative
+  factors or a double-count, and whether `f` - "fraction of the reflecting
+  surface in view" - corresponds to anything measurable.
+- Recorded the two design holes found in the last two days as the *genre* of
+  finding wanted, rather than as warnings: the activity gate that would have
+  over-counted a treadmill run as a full MED, and the settings page that was
+  invisible because nothing indicated other pages existed. Neither was a coding
+  error; both were building from the inside, and both were found by the human
+  rather than by the author re-reading its own work. **That is the argument for
+  the pass.**
