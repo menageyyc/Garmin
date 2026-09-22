@@ -89,7 +89,7 @@ testable from Claude's sandbox.
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | **Answered: `epix2pro47mm` is correct - compiler accepted it** |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
-| 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | **Contract verified against docs; live call still open** - untestable from sandbox |
+| 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | **ANSWERED 2026-09-22: YES.** `HTTP 200 OK` in the simulator. Returns `uv_index` and a correct top-level `elevation` (336 m for Olathe, KS). Daylight value still to confirm |
 | 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | **Answered: yes** |
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 
@@ -124,6 +124,7 @@ testable from Claude's sandbox.
 | 2026-09-21 | Set minApiLevel to 5.2.0, the device's own level | Stops the compiler rejecting APIs introduced between 3.3 and 5.2. Costs nothing with one device targeted. Lower it in v3 and add `has` checks |
 | 2026-09-21 | Target the 5.x-era API surface, not Connect IQ 9 | Epix Pro (Gen 2) is a 2023 device and is not a CIQ 9 device |
 | 2026-09-22 | v0 refetches on every show, not only when no reading is cached | The old gate meant the app retried forever while broken and never once it worked - backwards for a build whose only job is exercising the fetch |
+| 2026-09-22 | Open-Meteo air-quality endpoint confirmed as the data source | Live `HTTP 200` with a correct grid elevation. No need for the GFS fallback; `BASE_URL` stays as it is |
 | 2026-09-22 | Poor GPS quality is logged, not gated on; 0,0 is a hard fail | A last-known fix is fine for a 40 km grid cell. 0,0 is the only case that silently misleads, because Open-Meteo answers for Null Island with a plausible tropical UV over HTTP 200 |
 
 ---
@@ -417,3 +418,34 @@ testable from Claude's sandbox.
   straight through `UV INDEX`. The stack now measures `getFontHeight()` and
   flows downward from it, which also holds for the other epix Pro sizes instead
   of needing per-resolution fractions.
+
+### 2026-09-22 - THE PIPE WORKS. Question 12 answered
+- `HTTP 200 OK` in the simulator. **The single largest unverified assumption in
+  the project is now settled.** The CAMS air-quality endpoint returns UV to a
+  Connect IQ client exactly as designed. The GFS fallback is not needed and
+  `BASE_URL` stays as it is.
+- **`elevation` is returned, and it is right.** Screen read `-18 m  -354 vs
+  grid`, so the API supplied 336 m. Olathe, Kansas sits at roughly 320-340 m.
+  That was verified from documentation earlier today; it is now verified live,
+  and it means v1's altitude correction has a real baseline to work against.
+- **The simulator has a default position: 38.86, -94.80** - Olathe, Kansas,
+  Garmin's own HQ. `Position.getInfo()` returns it as a cached fix with no
+  `Set Position` needed, which is why the fix reads `(cached)` and the one-shot
+  path never ran. Earlier guidance in this file implied a position had to be set
+  before anything would happen; that is not so.
+- **My changes compiled first time.** Builds 6 and 7 in the terminal log are
+  the new code; builds 1-5 are the historical 19 -> 3 -> 2 -> 2 -> 0 sequence
+  from the previous session, still in the scrollback. `Timer`,
+  `Position.QUALITY_*` and `BehaviorDelegate` were the untested surface and all
+  three were clean.
+- **One genuine regression, caught by the compiler.** Assigning the client to a
+  local and calling `start()` on that left `_client` write-only, hence
+  "Member variable '_client' is not used". Fixed by giving UvClient a `cancel()`
+  and calling it on the previous client, which is both a real read and a real
+  cleanup. Deleting the field instead would have risked the client being
+  collected while a callback was still registered against it.
+- **What UV 0.0 does and does not prove.** It was about 23:30 local in Olathe,
+  so 0.0 is correct - but every night hour returns 0.0, so a wrong hour index
+  would look identical. The UTC alignment in `currentHourIndex` is NOT yet
+  confirmed. Needs a daylight position and the `slot+Ns` figure from the
+  console.

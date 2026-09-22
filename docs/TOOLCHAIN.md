@@ -340,7 +340,8 @@ appear at all.
 
 - [ ] Is the manifest product id `epix2pro47mm` correct? See "Confirm the device
       id" above. Fix the one line in `manifest.xml` if it differs.
-- [ ] Does `air-quality-api.open-meteo.com` return a UV value *in practice*? The
+- [x] **ANSWERED 2026-09-22: yes.** `HTTP 200 OK`, with a correct grid
+      elevation of 336 m for Olathe. Left below for the reasoning. The
       **documented** contract has now been verified and matches what the client
       assumes: `uv_index` is a valid hourly variable on this endpoint, it is
       CAMS-sourced, the response carries a top-level `elevation` field,

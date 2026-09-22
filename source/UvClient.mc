@@ -186,6 +186,17 @@ class UvClient {
         fail(null, "GPS timed out");
     }
 
+    // Releases anything this client still holds, so a superseded fetch cannot
+    // leave a GPS timer armed or the receiver enabled behind it. Also what
+    // makes UvMainView._client a read rather than a write-only field - the
+    // compiler was right to warn about that, and silencing it by deleting the
+    // reference would risk the client being collected while a callback is
+    // still registered against it.
+    public function cancel() as Void {
+        cancelGpsTimer();
+        stopGps();
+    }
+
     // One-shot is meant to power the receiver down on its own, but saying so
     // explicitly costs nothing and makes the timeout path unambiguous.
     private function stopGps() as Void {

@@ -35,6 +35,14 @@ class UvMainView extends WatchUi.View {
             return;
         }
 
+        // Let the previous client go cleanly. Reading the field here is also
+        // what the compiler wanted: calling start() on a local left _client
+        // write-only, which it correctly flagged as unused.
+        var previous = _client;
+        if (previous != null) {
+            previous.cancel();
+        }
+
         // Drop the in-memory value so a stale reading cannot sit on screen
         // looking like a fresh one. Storage is untouched, so the glance keeps
         // showing the last good figure until a new fetch actually succeeds.
