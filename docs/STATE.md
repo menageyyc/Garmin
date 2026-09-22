@@ -132,9 +132,15 @@ than blanking; surface and surroundings are settable on the watch and from the
 phone; three pages with a page indicator, and BACK returns to the reading page
 rather than quitting.
 
-Next action: **a cold review of v1a** (`docs/REVIEW-BRIEF-v1a.md`), and **v1b**
-- the background service, cached refresh and glance. Independent of each other;
-either can go first.
+**The cold review is done: `docs/REVIEW-v1a-findings.md`.** Read it before
+v1b. Its top four findings change v1b's inputs: the `elevation` field is
+probably the point terrain height rather than the cell mean (one simulator test
+decides it), CAMS already applies a snow albedo so the app's +42% double
+counts, position and altitude are only sampled when a fetch starts so the
+distance check can never fire, and a real watch's cached fix is of unknown age.
+
+Next action: work the review's "Suggested order", then **v1b** - the background
+service, cached refresh and glance.
 
 ---
 
@@ -886,3 +892,34 @@ answer for this hour, and it never fired.
   error; both were building from the inside, and both were found by the human
   rather than by the author re-reading its own work. **That is the argument for
   the pass.**
+
+### 2026-09-22 - Cold review of v1a delivered (Fable 5.1)
+- `docs/REVIEW-v1a-findings.md`. Eleven findings, ranked for the ski hill,
+  every physics and platform claim checked against a primary source. Nothing
+  compiled; the sandbox cannot. Highlights, in rank order:
+  - **Open-Meteo's `elevation` defaults to the 90 m DEM height at the requested
+    point**, not the CAMS cell mean; `elevation=nan` is documented to return the
+    grid-cell average. On a piste the delta is therefore ~0 and the altitude
+    correction silently vanishes. v0's flat-terrain checks could not
+    distinguish the two. Five-minute simulator test in the review.
+  - **CAMS already models snow albedo** (regional albedo when model snow depth
+    > 2 cm, old/fresh split). The app's +42% is stacked on top. Measured
+    clear-sky snow enhancement of the index is 15-25% in total.
+  - **Position and altitude are written only in `UvClient.start()` /
+    `onPosition()`**, and `forecast.lat/lon` are copies of the same values, so
+    `distanceKm` is 0 after every successful fetch and `onShow()` cannot detect
+    a move. Fetch at home, drive to the hill, open the app: Calgary's number,
+    labelled current.
+  - **A real watch's cached fix is the end of the last GPS activity**, and
+    `Position.Info.when` is never read. The simulator's always-correct default
+    position hid this.
+  - Hourly values are instantaneous; the step read is up to 30-50% off on the
+    shoulders. Surroundings only scales the reflected term, so "Enclosed" is
+    not a reduction. CAMS global updates every 12 h, so fetch age is not data
+    age, and a 30-minute v1b refresh buys nothing. Situational surface settings
+    never expire and the default surface word is hidden by the 2% threshold.
+  - `migrate()` in `onStart()` will run in the background process once the app
+    class is `(:background)`; move it before v1b.
+- Constants (k_alt, albedo table, water, clamps, uncapped output) judged inside
+  the noise of the above; verdicts recorded in the review.
+- No code changed. Findings, not a rewrite, as the brief asked.
