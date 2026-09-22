@@ -275,12 +275,13 @@ If the position line still reads "No position" after setting one, fall back to
 **Simulation → FIT Data → Simulate Data**. Some builds of the simulator only
 populate position once data is being generated or played back.
 
-**Expect "No altitude", and do not treat it as a fault.**
-`Activity.getActivityInfo()` is only filled in while the simulator is
-generating or replaying data, so *Set Position* alone gives you a position but
-no barometric altitude. That is the simulator, not the app and not the
-barometer. To exercise the altitude line as well, use **Simulation → FIT Data →
-Simulate Data**, which supplies position and altitude together.
+**Altitude does work in the simulator.** An earlier version of this document
+predicted "No altitude" from *Set Position* alone. That was wrong — observed
+2026-09-22, `Activity.getActivityInfo().altitude` returns the simulator's
+default of about **-18 m** with no FIT data playing at all. The altitude line
+reads `-18 m` and carries no `vs grid` suffix until a fetch succeeds and
+supplies the API's grid elevation. Use **Simulation → FIT Data → Simulate
+Data** if you want a realistic varying altitude rather than the default.
 
 **The simulator launches the GLANCE, not the app, by default.** This is the
 single most confusing thing about running this project, because the glance
@@ -331,9 +332,9 @@ barometric altitude and the API's grid elevation is the whole reason this app
 is worth building — if it reads plausibly, the altitude correction in v1 has
 something real to work with.
 
-**In the simulator, expect `No altitude` instead** unless you are replaying FIT
-data (see above). That is normal and settles nothing either way; the altitude
-line is a watch test, not a simulator test.
+**In the simulator this reads about `-18 m` with no `vs grid` suffix** until a
+fetch succeeds. The suffix is the interesting half and needs a working fetch to
+appear at all.
 
 ## Known unknowns to check while you are in there
 

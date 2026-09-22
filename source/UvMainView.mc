@@ -59,11 +59,16 @@ class UvMainView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_BLACK);
         dc.clear();
 
-        drawReading(dc, w, h, state);
-        drawDiagnostics(dc, w, h, state);
+        var below = drawReading(dc, w, h, state);
+        drawDiagnostics(dc, w, h, below, state);
     }
 
-    private function drawReading(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {
+    // Returns the y just below the band label, so the diagnostic stack starts
+    // from a measured position instead of a guessed fraction. FONT_NUMBER_HOT
+    // is tall enough on a 416 px screen that the old hardcoded 0.20 / 0.42
+    // split drew the number straight through "UV INDEX". Measuring the font
+    // rather than assuming its height also keeps the other epix Pro sizes free.
+    private function drawReading(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Number {
         var uv = state.uvIndex;
 
         // Local variable types are inferred in Monkey C - an explicit "as Type"
@@ -83,18 +88,25 @@ class UvMainView extends WatchUi.View {
             colour = Graphics.COLOR_LT_GRAY;
         }
 
+        var numberTop = (h * 0.14).toNumber();
+        var numberHeight = dc.getFontHeight(Graphics.FONT_NUMBER_HOT);
+        var bandHeight = dc.getFontHeight(Graphics.FONT_XTINY);
+
         dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, (h * 0.20).toNumber(), Graphics.FONT_NUMBER_HOT,
+        dc.drawText(w / 2, numberTop, Graphics.FONT_NUMBER_HOT,
                     label, Graphics.TEXT_JUSTIFY_CENTER);
 
+        var bandTop = numberTop + numberHeight;
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, (h * 0.42).toNumber(), Graphics.FONT_XTINY,
+        dc.drawText(w / 2, bandTop, Graphics.FONT_XTINY,
                     band, Graphics.TEXT_JUSTIFY_CENTER);
+
+        return bandTop + bandHeight;
     }
 
     // The diagnostic stack. Each line answers one question: did GPS work, did
     // the barometer work, did the request work, what did the API assume.
-    private function drawDiagnostics(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {
+    private function drawDiagnostics(dc as Graphics.Dc, w as Number, h as Number, top as Number, state as UvState) as Void {
         var lines = [];
 
         var lat = state.latitude;
@@ -133,14 +145,14 @@ class UvMainView extends WatchUi.View {
         }
 
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        var y = h * 0.56;
-        var step = h * 0.09;
+        var y = top + (h * 0.02).toNumber();
+        var step = dc.getFontHeight(Graphics.FONT_XTINY) + (h * 0.015).toNumber();
         for (var i = 0; i < lines.size(); i += 1) {
             // The error line reads red; the rest stay white.
             if (i == 2 && error != null) {
                 dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
             }
-            dc.drawText(w / 2, (y + (i * step)).toNumber(), Graphics.FONT_XTINY,
+            dc.drawText(w / 2, y + (i * step), Graphics.FONT_XTINY,
                         lines[i], Graphics.TEXT_JUSTIFY_CENTER);
         }
 

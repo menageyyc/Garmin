@@ -34,11 +34,10 @@ diagnostic hardening has been pushed but **not yet compiled** - see the
    hour alignment is wrong
 5. **Press START to refetch.** No need to restart the app between attempts
 
-**Expect `No altitude` in the simulator.** `Activity.getActivityInfo()` is only
-populated while data is being generated or replayed, so *Set Position* alone
-gives a position and no altitude. That is the simulator, not the barometer and
-not a bug. Use **Simulation → FIT Data → Simulate Data** to exercise the
-altitude line too.
+**Altitude works in the simulator** - it reads about `-18 m`, the simulator's
+default, with no FIT data playing. An earlier note here predicted
+`No altitude`; that was wrong. The `vs grid` suffix stays absent until a fetch
+succeeds and supplies the API's grid elevation.
 
 **What that settles:** whether `air-quality-api.open-meteo.com` actually returns
 UV the way the client expects. The *documented* contract is now verified and
@@ -395,3 +394,26 @@ testable from Claude's sandbox.
   Claude sessions run on Anthropic infrastructure, not inside the editor, so
   that panel will never list this conversation. There is no connection between
   VS Code and Claude to re-establish; GitHub is the only channel.
+
+### 2026-09-22 - Old build on screen, and two corrections
+- Matt reached the app view. The screen showed `No position`, `-18 m`,
+  `No request yet`. That combination is **impossible in the current code**:
+  altitude is only read inside `UvClient.start()`, which sets
+  `requestInFlight` true, and the new third line renders that as `Fetching...`.
+  Only the pre-39a42c5 build, which had no `Fetching...` branch, prints
+  `No request yet` while altitude is populated. There was also no
+  `START = retry` line. Diagnosis: a debug session left running from before the
+  pull, so F5 never rebuilt and the simulator kept the stale .prg.
+- **Version tells added to the triage:** the current build says `Fetching...`
+  rather than `No request yet` during a request, and draws `START = retry` at
+  the bottom. Absence of either means a stale binary, not a code fault.
+- **Correction: altitude does work in the simulator.** The previous entry
+  predicted `No altitude` from Set Position alone, reasoning from forum reports
+  that `Activity.getActivityInfo()` is only populated during data playback.
+  Observed behaviour contradicts that - it returns the simulator default of
+  about -18 m with nothing playing. Both docs corrected.
+- **Fixed a real layout collision.** `FONT_NUMBER_HOT` at `h * 0.20` overruns
+  the band label at `h * 0.42` on a 416 px screen, so the big number drew
+  straight through `UV INDEX`. The stack now measures `getFontHeight()` and
+  flows downward from it, which also holds for the other epix Pro sizes instead
+  of needing per-resolution fractions.
