@@ -19,12 +19,32 @@ class UvMainView extends WatchUi.View {
         View.initialize();
     }
 
+    // Refetch on every show. The old gate was `!requestInFlight && !hasReading()`,
+    // and since uvIndex is persisted to storage and restored by UvState.load(),
+    // that meant the app stopped calling the API entirely once a single fetch
+    // had succeeded: it retried forever while broken and never once it worked.
+    // Exactly backwards for a build whose only job is exercising the fetch.
     function onShow() as Void {
+        refetch();
+    }
+
+    // Also reached from the START button, via UvMainDelegate.
+    public function refetch() as Void {
         var state = UvState.get();
-        if (!state.requestInFlight && !state.hasReading()) {
-            _client = new UvClient(method(:onFetchDone));
-            _client.start();
+        if (state.requestInFlight) {
+            return;
         }
+
+        // Drop the in-memory value so a stale reading cannot sit on screen
+        // looking like a fresh one. Storage is untouched, so the glance keeps
+        // showing the last good figure until a new fetch actually succeeds.
+        state.uvIndex = null;
+        state.clearError();
+
+        var client = new UvClient(method(:onFetchDone));
+        _client = client;
+        client.start();
+        WatchUi.requestUpdate();
     }
 
     public function onFetchDone(success as Boolean) as Void {
@@ -98,10 +118,14 @@ class UvMainView extends WatchUi.View {
             lines.add("No altitude");
         }
 
+        // "No request yet" used to cover both "not started" and "in flight".
+        // Separating them means a hung fetch reads as a hung fetch.
         var error = state.errorText;
         var code = state.httpCode;
         if (error != null) {
             lines.add(error);
+        } else if (state.requestInFlight) {
+            lines.add("Fetching...");
         } else if (code != null) {
             lines.add("HTTP " + code.toString() + " OK");
         } else {
@@ -119,5 +143,9 @@ class UvMainView extends WatchUi.View {
             dc.drawText(w / 2, (y + (i * step)).toNumber(), Graphics.FONT_XTINY,
                         lines[i], Graphics.TEXT_JUSTIFY_CENTER);
         }
+
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, (h * 0.84).toNumber(), Graphics.FONT_XTINY,
+                    "START = retry", Graphics.TEXT_JUSTIFY_CENTER);
     }
 }

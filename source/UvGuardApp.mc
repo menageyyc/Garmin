@@ -23,7 +23,8 @@ class UvGuardApp extends Application.AppBase {
     // objects. It never runs in the glance scope, so the complaint is spurious.
     (:typecheck(false))
     function getInitialView() {
-        return [new UvMainView()];
+        var view = new UvMainView();
+        return [view, new UvMainDelegate(view)];
     }
 
     // Returning the glance view is what puts the app in the glance carousel on

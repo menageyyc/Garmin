@@ -11,23 +11,38 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 ## RESUMING? READ THIS FIRST
 
 **Where things stand:** v0 compiles clean and runs in the simulator. The whole
-toolchain is proven. No runtime behaviour has been confirmed yet.
+toolchain is proven. No runtime behaviour has been confirmed yet. A round of
+diagnostic hardening has been pushed but **not yet compiled** - see the
+2026-09-22 log entry.
 
 **The immediate next action** is to verify the runtime path in the simulator:
 
 1. Allow the Windows Firewall prompt for `simulator.exe` (blocking it makes
    every web request fail in a way that looks like an API fault)
-2. Set a simulated GPS position via the simulator's **Simulation** menu - it has
-   no GPS, so without this the app correctly shows "No position"
-3. Read the three diagnostic lines on screen: position, altitude vs the API's
-   grid elevation, and the HTTP result
+2. Set a simulated GPS position via **Settings → Set Position**. Not the
+   Simulation menu - this doc said that and was wrong. Without a position the
+   app correctly shows "No position" and never calls the API
+3. **Watch the console, not just the screen.** The app now prints the fix and
+   its quality, the altitude, the outgoing request, and on success a line like
+   `UV OK uv=4.35 gridElev=1048 m idx=20/24 slot+1873s`. `gridElev=ABSENT`
+   means no `elevation` field came back; `slot+Ns` outside 0-3599 means the UTC
+   hour alignment is wrong
+4. **Press START to refetch.** No need to restart the app between attempts
+
+**Expect `No altitude` in the simulator.** `Activity.getActivityInfo()` is only
+populated while data is being generated or replayed, so *Set Position* alone
+gives a position and no altitude. That is the simulator, not the barometer and
+not a bug. Use **Simulation → FIT Data → Simulate Data** to exercise the
+altitude line too.
 
 **What that settles:** whether `air-quality-api.open-meteo.com` actually returns
-UV the way the client expects. This has never been testable from Claude's
-sandbox - egress to Open-Meteo is blocked there - so it is the single largest
-unverified assumption in the project. If it fails, the fallback is the main
-forecast API, whose `uv_index` comes from GFS rather than CAMS, and `BASE_URL`
-in `source/UvClient.mc` is the only line that changes.
+UV the way the client expects. The *documented* contract is now verified and
+matches the client (see the 2026-09-22 entry); the *live call* is what remains.
+It has never been testable from Claude's sandbox - egress there is an allowlist
+that blocks every external host - so it is the single largest unverified
+assumption in the project. If it fails, the fallback is the main forecast API,
+whose `uv_index` comes from GFS rather than CAMS, and `BASE_URL` in
+`source/UvClient.mc` is the only line that changes.
 
 **After that works:** v1 per the build plan - altitude and albedo correction,
 colour bands, glance, background refresh with caching, settings.
@@ -70,7 +85,7 @@ testable from Claude's sandbox.
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | **Answered: `epix2pro47mm` is correct - compiler accepted it** |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
-| 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | Open - untestable from sandbox |
+| 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | **Contract verified against docs; live call still open** - untestable from sandbox |
 | 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | **Answered: yes** |
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 
@@ -104,6 +119,8 @@ testable from Claude's sandbox.
 | 2026-09-21 | Native short repeating timer recommended for tan mode rotation | 10-15 min. The nag is wanted there, and short sessions bound the can't-stop-it flaw |
 | 2026-09-21 | Set minApiLevel to 5.2.0, the device's own level | Stops the compiler rejecting APIs introduced between 3.3 and 5.2. Costs nothing with one device targeted. Lower it in v3 and add `has` checks |
 | 2026-09-21 | Target the 5.x-era API surface, not Connect IQ 9 | Epix Pro (Gen 2) is a 2023 device and is not a CIQ 9 device |
+| 2026-09-22 | v0 refetches on every show, not only when no reading is cached | The old gate meant the app retried forever while broken and never once it worked - backwards for a build whose only job is exercising the fetch |
+| 2026-09-22 | Poor GPS quality is logged, not gated on; 0,0 is a hard fail | A last-known fix is fine for a 40 km grid cell. 0,0 is the only case that silently misleads, because Open-Meteo answers for Null Island with a plausible tropical UV over HTTP 200 |
 
 ---
 
@@ -127,6 +144,8 @@ testable from Claude's sandbox.
 | Concluding the SDK is missing because `monkeyc` fails in a terminal | The SDK Manager does not put its bin folder on PATH. Verify via the VS Code extension instead |
 | Native repeating timer as a default in protect mode | The app cannot stop it either, so it keeps buzzing after the session ends. Fine in tan mode, where sessions are short |
 | Fitzpatrick roman-numeral dropdown | Produces an authoritative-looking number that predicts almost nothing |
+| Gating the fetch on `!hasReading()` | uvIndex is persisted, so one success permanently stopped the app calling the API |
+| Failing the fetch on `QUALITY_NOT_AVAILABLE` | Would block the simulator test for no safety gain. The 0,0 guard is what actually prevents a false positive |
 
 ---
 
@@ -303,3 +322,51 @@ testable from Claude's sandbox.
   makeWebRequest fails in the simulator and looks like an API fault.
 - Toolchain fully proven: SDK 9.2.0, Temurin JDK, developer key, device target,
   clone-and-pull workflow via update.bat.
+
+### 2026-09-22 - Runtime path hardened before first live test
+- Read the whole v0 source before touching it. Found five defects in the exact
+  path about to be tested, one of which could have made the test **lie**.
+- **The false positive:** `start()` guarded against a 0,0 fix; `onPosition()`
+  did not. A one-shot callback carrying "no fix yet" would have sent the app to
+  Null Island, where Open-Meteo returns a plausible tropical UV over HTTP 200.
+  That reads as success and proves nothing. Guard added, symmetric with the
+  cached path.
+- **The fetch gate:** `onShow()` checked `!hasReading()`, and uvIndex is
+  persisted, so after one success the app never called the API again. Now
+  refetches on every show and clears the in-memory value first so a stale
+  number cannot sit on screen looking fresh. Storage is untouched, so the
+  glance keeps its last good reading.
+- **Added a retry:** `UvMainDelegate`, START refetches in place. The test loop
+  was otherwise "restart the app" every time.
+- **Added success logging.** Three small lines on a round screen is a poor
+  channel for settling question 12. The console now carries the fix and its
+  quality, the altitude, the outgoing request, and on success the UV value,
+  grid elevation, series index and offset into the hour slot.
+- **Bounded the GPS wait.** A one-shot that never completed left
+  `requestInFlight` true forever - "..." on screen, no error, indistinguishable
+  from still trying. 45 s timeout, then an explicit failure.
+- Minor: the cached-fix path now falls back to GPS altitude the way
+  `onPosition` already did; the third diagnostic line distinguishes "Fetching..."
+  from "No request yet".
+- **Verified the Open-Meteo contract from documentation** (WebSearch reaches the
+  network even though curl and WebFetch do not). `uv_index` is a valid hourly
+  variable on the air-quality endpoint and is CAMS-sourced; the response does
+  carry a top-level `elevation`; `forecast_days` accepts 0-7, default 5; and
+  `timeformat=unixtime` returns GMT+0 epoch seconds against a default
+  `timezone=GMT`. `Time.now().value()` is also UTC, so `currentHourIndex` is
+  comparing like with like. Every assumption in the client holds on paper.
+- **Corrected two documentation errors that would have cost simulator time.**
+  The position menu is **Settings → Set Position**, not the Simulation menu -
+  both STATE.md and TOOLCHAIN.md said the latter. And
+  `Activity.getActivityInfo()` is only populated while data is generated or
+  replayed, so `No altitude` is the *expected* simulator result from Set
+  Position alone. TOOLCHAIN.md had been priming the reader to treat that line
+  as the one to watch, which would have looked like a barometer failure.
+- Corrected CLAUDE.md constraint 6: sandbox egress is an allowlist, not a block
+  on three named hosts. `example.com` is refused the same way. There is no
+  hostname workaround, and the GFS fallback is equally untestable from here.
+- **v1 note, not acted on:** `forecast_days=1` returns the current *UTC* day,
+  which cuts at 18:00 local in Calgary. Self-consistent for "now" in v0, but
+  v1's forward-looking burn-time curve will need `forecast_days=2`.
+- **NOT COMPILED.** No Garmin SDK in this environment. Every change here is
+  unverified against the compiler.

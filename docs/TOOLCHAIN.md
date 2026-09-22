@@ -214,7 +214,7 @@ faster loop and where most work should happen.
 
 The simulator does everything the watch does except be on your wrist, and it is
 where you should spend most of your time. You can feed it a fake GPS position
-(**Simulation → Position**) and watch the HTTP traffic, which is how you will
+(**Settings → Set Position**) and watch the HTTP traffic, which is how you will
 debug the Open-Meteo call without going outside.
 
 ---
@@ -266,9 +266,38 @@ all. Do not design around that — treat it as a bonus, not a guarantee.
 makes the web request on the app's behalf, so blocking it makes every fetch fail
 in a way that looks like an API fault rather than a firewall.
 
-**Give the simulator a position.** It has no GPS. Use the **Simulation** menu to
-set coordinates, otherwise the app correctly reports "No position" and never
-calls the API.
+**Give the simulator a position.** It has no GPS. The menu is
+**Settings → Set Position** — *not* the Simulation menu, which is where this
+document used to send you. Without a position the app correctly reports
+"No position" and never calls the API.
+
+If the position line still reads "No position" after setting one, fall back to
+**Simulation → FIT Data → Simulate Data**. Some builds of the simulator only
+populate position once data is being generated or played back.
+
+**Expect "No altitude", and do not treat it as a fault.**
+`Activity.getActivityInfo()` is only filled in while the simulator is
+generating or replaying data, so *Set Position* alone gives you a position but
+no barometric altitude. That is the simulator, not the app and not the
+barometer. To exercise the altitude line as well, use **Simulation → FIT Data →
+Simulate Data**, which supplies position and altitude together.
+
+**Press START to refetch.** You do not have to restart the app between
+attempts. The screen shows `START = retry` at the bottom as a reminder.
+
+**Watch the console, not just the screen.** Three small lines on a round screen
+is a poor channel for what we are actually trying to learn. The app now prints
+the GPS fix and its quality, the barometric altitude, the outgoing request, and
+on success a line like:
+
+```
+UV OK uv=4.35 gridElev=1048 m idx=20/24 slot+1873s
+```
+
+`gridElev=ABSENT` would mean the response carried no `elevation` field.
+`slot+Ns` should land between 0 and 3599 — anything outside that means the UTC
+hour alignment is wrong. Copy the whole console output back rather than
+retyping the screen.
 
 ## What v0 should show you
 
@@ -279,19 +308,29 @@ The v0 screen is a diagnostic, not a design. It answers four questions at once:
 | Big number | The whole pipe works end to end |
 | `51.05, -114.07 (cached)` | GPS resolved, and whether it cost battery |
 | `1045 m  +38 vs grid` | The barometer works, and how far off the API's grid cell is |
-| `HTTP 200 OK` or a red error | Exactly which dependency failed |
+| `HTTP 200 OK`, `Fetching...`, or a red error | Exactly which dependency failed, or that one is still in flight |
 
-That third line is the one to watch. The gap between your barometric altitude
-and the API's grid elevation is the whole reason this app is worth building —
-if it reads plausibly, the altitude correction in v1 has something real to work
-with.
+That third line is the one to watch **on the watch**. The gap between your
+barometric altitude and the API's grid elevation is the whole reason this app
+is worth building — if it reads plausibly, the altitude correction in v1 has
+something real to work with.
+
+**In the simulator, expect `No altitude` instead** unless you are replaying FIT
+data (see above). That is normal and settles nothing either way; the altitude
+line is a watch test, not a simulator test.
 
 ## Known unknowns to check while you are in there
 
 - [ ] Is the manifest product id `epix2pro47mm` correct? See "Confirm the device
       id" above. Fix the one line in `manifest.xml` if it differs.
-- [ ] Does `air-quality-api.open-meteo.com` return a UV value? This could not be
-      tested from Claude's sandbox — egress to Open-Meteo is blocked there. If it
+- [ ] Does `air-quality-api.open-meteo.com` return a UV value *in practice*? The
+      **documented** contract has now been verified and matches what the client
+      assumes: `uv_index` is a valid hourly variable on this endpoint, it is
+      CAMS-sourced, the response carries a top-level `elevation` field,
+      `forecast_days` accepts 0–7, and `timeformat=unixtime` returns GMT+0
+      epoch seconds against a default `timezone=GMT`. What remains untested is
+      the live call — egress from Claude's sandbox is an allowlist and blocks
+      every external host, so this can only be settled on your machine. If it
       fails, the fallback is the main forecast API, whose `uv_index` comes from
       GFS rather than CAMS. `BASE_URL` in `source/UvClient.mc` is the only line
       that changes.

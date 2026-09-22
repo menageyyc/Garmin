@@ -31,9 +31,14 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
 4. **Dose accumulates only during tracked sun time** — an outdoor activity recording,
    or a manually started sun session. Never integrate blindly against the solar clock.
 5. **Open-Meteo, not OpenUV.** An embedded API key in a Connect IQ app is extractable.
-6. **This sandbox cannot reach Garmin or Open-Meteo.** Egress policy blocks
-   `developer.garmin.com`, `apps.garmin.com` and `api.open-meteo.com`. Source is
-   written here; compiling, simulating and sideloading happen on the user's machine.
+6. **This sandbox cannot reach Garmin or Open-Meteo.** Egress is an *allowlist*,
+   not a blocklist on a few named hosts. `developer.garmin.com`,
+   `apps.garmin.com`, `api.open-meteo.com` and `air-quality-api.open-meteo.com`
+   all get `403 Forbidden` at the CONNECT stage - and so does `example.com`.
+   Trying a different hostname is never the workaround. `WebSearch` does work,
+   on a separate egress path, so documentation can be checked even though APIs
+   cannot be called. Source is written here; compiling, simulating and
+   sideloading happen on the user's machine.
 7. **Never ask the user for a Fitzpatrick numeral.** Self-reported skin type has
    no significant correlation with measured MED, and ~42% of people cannot be
    classified from the standard questions at all. Ask the two behavioural
