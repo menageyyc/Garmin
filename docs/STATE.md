@@ -813,3 +813,18 @@ answer for this hour, and it never fired.
 - **Stale-binary tell, updated:** the hint is now per-page and short. If the
   screen reads `START refresh  MENU set` with the final letter clipped off the
   edge, or shows no page dots, the simulator is serving a pre-2026-09-22 `.prg`.
+
+### 2026-09-22 - v1a CONFIRMED WORKING. BACK behaviour fixed
+- **All three pages render, the dots show, and the settings picker works.**
+  Fresh snow plus open reads `+42% fresh snow` on the reading page. v1a is
+  functionally complete.
+- **BACK was quitting the app from any page.** That is the Connect IQ default,
+  but on a three-page app it reads as a crash: you press BACK expecting to undo
+  a page turn and end up outside the app looking at the simulator's own screen.
+  Matt hit it within a minute of the settings page existing.
+- Fixed: BACK returns to the reading page from a sub-page, and only leaves the
+  app from the reading page itself. `onBack()` returning false is what hands
+  the press back to the framework so the normal exit still works.
+- **Not a crash, worth recording as a triage note:** a blue triangle on black
+  in the simulator is not this app. The launcher icon is an orange sun. That
+  screen is the simulator outside the app; F5 relaunches.

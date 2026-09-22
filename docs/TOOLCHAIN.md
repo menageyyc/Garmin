@@ -414,6 +414,7 @@ what you are looking at is different, and there is a settings route now.
 |---|---|
 | **START** | Force a refresh. Always fetches, even when the cache is fine |
 | **DOWN** / **UP** | Turn the page: reading -> diagnostics -> settings |
+| **BACK** | Return to the reading page. From the reading page itself it leaves the app - that is the platform default, not a crash. Press F5 to relaunch |
 | **MENU** | Same settings, as a shortcut. **Long press of UP** on this hardware; in the simulator the keyboard shortcut is **M** |
 
 Three dots at the bottom show which page you are on. On the settings page,

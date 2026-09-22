@@ -36,6 +36,12 @@ class UvMainDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
+    // Handled means "stay in the app". Unhandled - false - lets the framework
+    // do what BACK normally does, which is leave.
+    function onBack() as Boolean {
+        return _view.backPressed();
+    }
+
     function onMenu() as Boolean {
         UvSettingsMenu.show();
         return true;

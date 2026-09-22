@@ -63,6 +63,21 @@ class UvMainView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    // BACK returns to the reading page from a sub-page, and only leaves the app
+    // from the reading page itself. The platform default is that BACK quits
+    // from anywhere, which on a three-page app reads as the app falling over:
+    // you press BACK expecting to undo a page turn and end up outside the app
+    // entirely. Returning false hands the press back to the framework, which is
+    // what makes the reading page still exit normally.
+    public function backPressed() as Boolean {
+        if (_page == PAGE_READING) {
+            return false;
+        }
+        _page = PAGE_READING;
+        WatchUi.requestUpdate();
+        return true;
+    }
+
     // START means refresh everywhere except the settings page, where it opens
     // the picker. The settings menu also hangs off MENU, but MENU is a long
     // press of UP on this hardware and Garmin's own forums carry reports of
