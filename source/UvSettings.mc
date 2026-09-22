@@ -118,8 +118,14 @@ module UvSettings {
     // a local initialised to null then reassigned from it is inferred as Null.
     // The value is narrowed and clamped before it leaves, so the caller keeps
     // full checking.
+    //
+    // Not `private`. A module member cannot carry an access modifier in Monkey
+    // C - `private` is class-only - and the parser gives up on the whole module
+    // body when it meets one, so the next function reports as a second,
+    // unrelated-looking error. Helpers in a module are reachable as
+    // UvSettings.readIndex(), which is harmless.
     (:typecheck(false))
-    private function readIndex(key as String, count as Number) as Lang.Number {
+    function readIndex(key as String, count as Number) as Lang.Number {
         var raw = null;
         try {
             raw = Application.Properties.getValue(key);
@@ -136,7 +142,7 @@ module UvSettings {
     // Properties.setValue throws InvalidKeyException if the key is not
     // declared in the settings resources, so a typo here is a crash rather
     // than a no-op. Both keys are declared in resources/settings/properties.xml.
-    private function writeIndex(key as String, index as Number, count as Number) as Void {
+    function writeIndex(key as String, index as Number, count as Number) as Void {
         if (index < 0 || index >= count) {
             return;
         }

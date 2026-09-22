@@ -56,6 +56,11 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
   Annotate fields, parameters and return types; never locals.
 - A two-part null test (`if (a != null && a.b != null)`) does not narrow `a.b`
   for the next line. Read the value into a local and test that.
+- **A module member cannot be `private`.** Access modifiers are class-only. A
+  `private` inside a `module` block fails the parse, and because the parser then
+  abandons the whole module body, the *next* function reports as a second error
+  that looks unrelated ("extraneous input 'private' expecting 'class',
+  'module', ..."). Two errors, one cause. Module helpers are simply public.
 - `Any` sits **above** `Object`. Dictionary and Array lookups yield `Any`, which
   therefore cannot be passed to a parameter declared `Object`. `Any` also has no
   writable name (`as Any` gives "Cannot resolve type"), while strict mode demands

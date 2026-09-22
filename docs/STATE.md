@@ -703,3 +703,26 @@ quietly wrong number rather than an error, which is the worst kind.
 - Today is the argument for that pass: the activity gate above was a design
   hole sitting in the design authority across several sessions, and it took a
   reader who had not written it to see it.
+
+### 2026-09-22 - First v1a build: 2 errors, one cause
+- `UvSettings.mc` lines 121 and 139. **A module member cannot be `private` in
+  Monkey C** - access modifiers are class-only. The parser abandons the whole
+  module body at the first one, so the *next* function reports as a second,
+  unrelated-looking error ("extraneous input 'private' expecting 'class',
+  'module', ..."). Two errors, one mistake.
+- Confirmed by natural experiment across the twelve files rather than by
+  guessing: `UvScale`, `UvNum`, `UvCorrection` and `UvSettingsMenu` are modules
+  with no `private` and compiled clean; `UvForecast` and `UvState` are classes
+  *with* `private` and compiled clean; `UvSettings` was the only module given
+  `private` members and the only file that errored.
+- Fixed by dropping `private` from both. Module helpers are reachable as
+  `UvSettings.readIndex()`, which is harmless. Rule added to `CLAUDE.md`.
+- Two parse errors on a 1,700-line rewrite is a better first build than v0's
+  19. But a file that fails to parse is not a file that has been type-checked,
+  so `catch (e)`, `Menu2`, `MenuItem`'s four-argument constructor and
+  `Application.Properties` are all still unexercised. The second build is the
+  real test.
+- **Simulator note for the resume block:** the Settings menu group - Color
+  Mode, Enhanced Readability, Flashlight Available, Glance Launch Mode, Night
+  Mode - is greyed out when no app is loaded. It is not a separate fault; a
+  failed build means there is nothing for those options to apply to.
