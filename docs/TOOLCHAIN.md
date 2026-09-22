@@ -400,3 +400,107 @@ between SDK releases. If you get errors about `as Float or Null` style
 annotations rather than about real logic, lower it:
 **Settings → search "monkeyC typeCheckLevel" → set to `Gradual` or `Silent`**.
 That is a v0 convenience. Worth tightening once the toolchain is proven.
+
+---
+
+## Testing v1a
+
+v1a replaces the v0 diagnostic screen. Same build loop - F5, simulator - but
+what you are looking at is different, and there is a settings route now.
+
+### The buttons
+
+| Button | Does |
+|---|---|
+| **START** | Force a refresh. Always fetches, even when the cache is fine |
+| **DOWN** (or UP) | Turn the page: reading <-> diagnostics |
+| **MENU** | Surface and surroundings settings, on the watch |
+
+The bottom of both pages reads `START refresh  MENU set` as a reminder. **If
+that line is missing you are running a stale binary** - stop the debug session
+before pressing F5, or the simulator serves the old `.prg` without rebuilding.
+
+### Page 1 - the reading
+
+The big number is now the **corrected** UV index, not the API's. Underneath:
+
+```
+        13.5
+     VERY HIGH
+      API 9.5
+   +10% altitude
+  +43% fresh snow
+    4 min ago
+```
+
+- `API 9.5` is what Open-Meteo said for the grid cell, before the watch
+  touched it. It is on the first page deliberately - "this app disagrees with
+  every other UV app" deserves an answer without a page turn
+- A correction that rounds to 0% is **not printed**. In a city, on grass, both
+  do, and the line reads `no correction`. That is correct, not a fault
+- The last line is freshness: `Just now`, `12 min ago`, `2 h old` in yellow,
+  `Cache expired` in orange, or a fetch error in red
+
+**In the simulator the altitude correction will look odd, and that is
+expected.** The simulator reports a fixed `-18 m` regardless of position, so
+against Olathe's 336 m grid elevation you get about `-35% altitude`. The
+arithmetic is right; the input is fake. Use **Simulation -> FIT Data ->
+Simulate Data** for a realistic altitude.
+
+### Page 2 - diagnostics
+
+Everything v0 showed, plus the series index:
+
+```
+   DIAGNOSTICS
+ 38.86, -94.80 (cached)
+ -18 m / grid 336 m
+ HTTP 200  idx 14/48
+ Fresh snow, open
+    4 min ago
+```
+
+`idx 14/48` is the hour slot within the cached series. 48 because v1 asks for
+two days, not one - `forecast_days=1` returns the current *UTC* day, which cuts
+at 18:00 local in Calgary and leaves the cache useless all evening.
+
+### Changing the settings
+
+Two routes, both writing the same store.
+
+**On the watch:** MENU -> Surface or Surroundings -> pick one. The number on
+the reading page changes as soon as you back out. This is the route that
+matters - you change the surface when you arrive at the ski hill, not when you
+install the app.
+
+**From the IDE:** `Ctrl+Shift+P` -> **Monkey C: Edit Application Settings**.
+
+> **Do not use the simulator's own File menu settings editor.** It has a
+> long-standing bug where it ignores `listEntry` values, and every setting in
+> this app is a list. The IDE-side editor is the one that works. If the editor
+> shows no properties at all, use the simulator's **File -> Reset All App
+> Data**, then close and reopen it.
+
+### What to watch in the console
+
+```
+UV OK raw=9.50 eff=13.54 gridElev=4 m idx=14/48 slot+707s alt=-2% albedo=+42%
+```
+
+- `raw` vs `eff` is the correction doing its job
+- `slot+Ns` must land between 0 and 3599. Outside that means the UTC hour
+  alignment has broken, which was confirmed working on 2026-09-22 and should
+  not regress
+- `idx=N/48` - a `/24` here means `forecast_days` did not take
+- `Irregular series` as an error means Open-Meteo returned a non-hourly time
+  array. That has never happened; if it does, the endpoint has changed shape
+  and that is worth investigating rather than working around
+
+### Known unknowns for this build
+
+- [ ] Does `Menu2` behave as written on API 5.2? Nothing in v0 used it
+- [ ] Does the IDE settings editor show both list settings?
+- [ ] Does setting a value on the watch and then opening the phone-side editor
+      show the value the watch wrote? Both should be reading the same store
+- [ ] Note the app memory budget the simulator reports now that the glance
+      scope has grown. The glance read `~6.8/59.9 kB` in v0

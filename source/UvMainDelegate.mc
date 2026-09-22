@@ -1,13 +1,11 @@
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-// v0's test loop is "change something, run it, read three lines". Without a
-// retry the only way to fetch again is to restart the app, which is slow and
-// reloads persisted state on the way through. START refetches in place.
+// START refetches in place, DOWN turns the page, MENU opens settings.
 //
 // Deliberately not (:glance) annotated. It belongs to the app scope alongside
-// UvMainView, and both are excluded from the glance build together, so there is
-// no dangling reference. A glance cannot be tapped anyway - input delegate
+// UvMainView, and both are excluded from the glance build together, so there
+// is no dangling reference. A glance cannot be tapped anyway - input delegate
 // methods are not invoked while a glance view is running.
 class UvMainDelegate extends WatchUi.BehaviorDelegate {
 
@@ -20,6 +18,21 @@ class UvMainDelegate extends WatchUi.BehaviorDelegate {
 
     function onSelect() as Boolean {
         _view.refetch();
+        return true;
+    }
+
+    function onNextPage() as Boolean {
+        _view.nextPage();
+        return true;
+    }
+
+    function onPreviousPage() as Boolean {
+        _view.nextPage();
+        return true;
+    }
+
+    function onMenu() as Boolean {
+        UvSettingsMenu.show();
         return true;
     }
 }

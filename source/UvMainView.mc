@@ -2,30 +2,48 @@ import Toybox.Lang;
 import Toybox.WatchUi;
 import Toybox.Graphics;
 import Toybox.System;
+import Toybox.Time;
 
-// v0's job is not to look good. It is to prove every external dependency works
-// and to say precisely which one failed when something does. Layout is
-// deliberately drawn in code and sized as a fraction of the screen, so the
-// other two epix Pro sizes cost nothing later.
+// Two pages. The first is the answer; the second is why you should believe it.
+//
+// v0's screen was a diagnostic that happened to show a UV number. v1 inverts
+// that: the reading and what corrected it come first, and position, grid
+// elevation and HTTP status move to a second page reached with DOWN. The
+// diagnostics stay because they earned their place - every problem in this
+// project so far was found by reading them - but they are no longer what the
+// app is for.
+//
+// Layout is drawn in code and flows from measured font heights rather than
+// screen fractions, because FONT_NUMBER_HOT is tall enough on a 416 px screen
+// that a guessed fraction drew the number straight through the band label.
+// Measuring also means the 390 and 454 px siblings cost nothing later.
 //
 // Every nullable field is read into a local before use. The type checker cannot
-// see that a helper like hasReading() guarantees uvIndex is non-null, and it is
-// right not to - another thread of control could clear it between the two calls.
+// see that a helper guarantees non-null, and it is right not to - another
+// thread of control could clear it between the two calls.
 class UvMainView extends WatchUi.View {
 
     private var _client as UvClient or Null = null;
+    private var _page as Number = 0;
 
     function initialize() {
         View.initialize();
     }
 
-    // Refetch on every show. The old gate was `!requestInFlight && !hasReading()`,
-    // and since uvIndex is persisted to storage and restored by UvState.load(),
-    // that meant the app stopped calling the API entirely once a single fetch
-    // had succeeded: it retried forever while broken and never once it worked.
-    // Exactly backwards for a build whose only job is exercising the fetch.
+    // The cache is the whole point of v1, so the network is a fallback rather
+    // than a reflex: fetch only when what is stored cannot answer for this
+    // hour, or is old enough that the cloud state it described has moved on.
+    // START forces a fetch regardless, which is also the test loop.
     function onShow() as Void {
-        refetch();
+        var state = UvState.get();
+        if (state.cacheState() != CACHE_CURRENT) {
+            refetch();
+        }
+    }
+
+    public function nextPage() as Void {
+        _page = (_page + 1) % 2;
+        WatchUi.requestUpdate();
     }
 
     // Also reached from the START button, via UvMainDelegate.
@@ -43,10 +61,8 @@ class UvMainView extends WatchUi.View {
             previous.cancel();
         }
 
-        // Drop the in-memory value so a stale reading cannot sit on screen
-        // looking like a fresh one. Storage is untouched, so the glance keeps
-        // showing the last good figure until a new fetch actually succeeds.
-        state.uvIndex = null;
+        // The cached series is deliberately left alone. A fetch that fails
+        // should degrade the reading to "an hour old", not blank it.
         state.clearError();
 
         var client = new UvClient(method(:onFetchDone));
@@ -67,17 +83,19 @@ class UvMainView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_BLACK);
         dc.clear();
 
-        var below = drawReading(dc, w, h, state);
-        drawDiagnostics(dc, w, h, below, state);
+        if (_page == 1) {
+            drawDiagnostics(dc, w, h, state);
+        } else {
+            drawReading(dc, w, h, state);
+        }
+
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, (h * 0.86).toNumber(), Graphics.FONT_XTINY,
+                    "START refresh  MENU set", Graphics.TEXT_JUSTIFY_CENTER);
     }
 
-    // Returns the y just below the band label, so the diagnostic stack starts
-    // from a measured position instead of a guessed fraction. FONT_NUMBER_HOT
-    // is tall enough on a 416 px screen that the old hardcoded 0.20 / 0.42
-    // split drew the number straight through "UV INDEX". Measuring the font
-    // rather than assuming its height also keeps the other epix Pro sizes free.
-    private function drawReading(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Number {
-        var uv = state.uvIndex;
+    private function drawReading(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {
+        var uv = state.effectiveNow();
 
         // Local variable types are inferred in Monkey C - an explicit "as Type"
         // on a local is a compile error, unlike on a field or a parameter.
@@ -96,26 +114,60 @@ class UvMainView extends WatchUi.View {
             colour = Graphics.COLOR_LT_GRAY;
         }
 
-        var numberTop = (h * 0.14).toNumber();
-        var numberHeight = dc.getFontHeight(Graphics.FONT_NUMBER_HOT);
-        var bandHeight = dc.getFontHeight(Graphics.FONT_XTINY);
-
+        var numberTop = (h * 0.13).toNumber();
         dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, numberTop, Graphics.FONT_NUMBER_HOT,
                     label, Graphics.TEXT_JUSTIFY_CENTER);
 
-        var bandTop = numberTop + numberHeight;
+        var bandTop = numberTop + dc.getFontHeight(Graphics.FONT_NUMBER_HOT);
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, bandTop, Graphics.FONT_XTINY,
                     band, Graphics.TEXT_JUSTIFY_CENTER);
 
-        return bandTop + bandHeight;
+        var lines = [];
+        var tints = [];
+
+        // What the server said, before the watch touched it. Shown whenever
+        // there is a raw value, including when the correction is nil, because
+        // "the app disagrees with every other UV app" needs an answer on the
+        // first screen rather than a page away.
+        var raw = state.rawNow();
+        if (raw != null) {
+            lines.add("API " + raw.format("%.1f"));
+            tints.add(Graphics.COLOR_WHITE);
+        }
+
+        // A term that rounds to nothing is not worth a line. In a city both do,
+        // and saying so once is more honest than two rows of "+0%".
+        var altPct = UvCorrection.altitudePercent(state.watchAltitude, state.forecast.gridElevation);
+        var albPct = UvCorrection.albedoPercent(UvSettings.albedo(), UvSettings.fraction());
+
+        if (altPct != 0) {
+            lines.add(signed(altPct) + "% altitude");
+            tints.add(Graphics.COLOR_LT_GRAY);
+        }
+        if (albPct != 0) {
+            lines.add(signed(albPct) + "% " + UvSettings.surfaceName(UvSettings.surface()).toLower());
+            tints.add(Graphics.COLOR_LT_GRAY);
+        }
+        if (altPct == 0 && albPct == 0 && raw != null) {
+            lines.add("no correction");
+            tints.add(Graphics.COLOR_DK_GRAY);
+        }
+
+        lines.add(statusText(state));
+        tints.add(statusTint(state));
+
+        drawStack(dc, w, h, bandTop + dc.getFontHeight(Graphics.FONT_XTINY), lines, tints);
     }
 
-    // The diagnostic stack. Each line answers one question: did GPS work, did
-    // the barometer work, did the request work, what did the API assume.
-    private function drawDiagnostics(dc as Graphics.Dc, w as Number, h as Number, top as Number, state as UvState) as Void {
+    private function drawDiagnostics(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {
+        var top = (h * 0.16).toNumber();
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, top, Graphics.FONT_XTINY, "DIAGNOSTICS", Graphics.TEXT_JUSTIFY_CENTER);
+
         var lines = [];
+        var tints = [];
 
         var lat = state.latitude;
         var lon = state.longitude;
@@ -125,47 +177,114 @@ class UvMainView extends WatchUi.View {
         } else {
             lines.add("No position");
         }
+        tints.add(Graphics.COLOR_WHITE);
 
         var alt = state.watchAltitude;
-        if (alt != null) {
-            var text = alt.format("%.0f") + " m";
-            var delta = state.altitudeDelta();
-            if (delta != null) {
-                text += (delta >= 0 ? "  +" : "  ") + delta.format("%.0f") + " vs grid";
-            }
-            lines.add(text);
+        var grid = state.forecast.gridElevation;
+        if (alt != null && grid != null) {
+            lines.add(alt.format("%.0f") + " m / grid " + grid.format("%.0f") + " m");
+        } else if (alt != null) {
+            lines.add(alt.format("%.0f") + " m / no grid");
         } else {
             lines.add("No altitude");
         }
+        tints.add(Graphics.COLOR_WHITE);
 
-        // "No request yet" used to cover both "not started" and "in flight".
-        // Separating them means a hung fetch reads as a hung fetch.
-        var error = state.errorText;
         var code = state.httpCode;
-        if (error != null) {
-            lines.add(error);
-        } else if (state.requestInFlight) {
-            lines.add("Fetching...");
-        } else if (code != null) {
-            lines.add("HTTP " + code.toString() + " OK");
-        } else {
-            lines.add("No request yet");
-        }
+        var idx = state.forecast.indexAt(nowEpoch());
+        lines.add((code == null ? "no HTTP" : "HTTP " + code.toString())
+                  + "  idx " + idx.toString() + "/" + state.forecast.hourCount().toString());
+        tints.add(Graphics.COLOR_WHITE);
 
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        var y = top + (h * 0.02).toNumber();
-        var step = dc.getFontHeight(Graphics.FONT_XTINY) + (h * 0.015).toNumber();
+        lines.add(UvSettings.describe());
+        tints.add(Graphics.COLOR_LT_GRAY);
+
+        lines.add(statusText(state));
+        tints.add(statusTint(state));
+
+        drawStack(dc, w, h, top + dc.getFontHeight(Graphics.FONT_XTINY), lines, tints);
+    }
+
+    // One line per question, flowed down from a measured starting point.
+    private function drawStack(dc as Graphics.Dc, w as Number, h as Number, top as Number,
+                               lines as Array, tints as Array) as Void {
+        var y = top + (h * 0.03).toNumber();
+        var step = dc.getFontHeight(Graphics.FONT_XTINY) + (h * 0.012).toNumber();
         for (var i = 0; i < lines.size(); i += 1) {
-            // The error line reads red; the rest stay white.
-            if (i == 2 && error != null) {
-                dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
-            }
+            dc.setColor(tintAt(tints, i), Graphics.COLOR_TRANSPARENT);
             dc.drawText(w / 2, y + (i * step), Graphics.FONT_XTINY,
-                        lines[i], Graphics.TEXT_JUSTIFY_CENTER);
+                        textAt(lines, i), Graphics.TEXT_JUSTIFY_CENTER);
+        }
+    }
+
+    // Array lookups yield Any, which cannot be passed to a typed parameter.
+    // Same dead end as the JSON narrowing, same resolution, same tiny blast
+    // radius - these two return fully typed values.
+    (:typecheck(false))
+    private function textAt(items, i) as Lang.String {
+        return items[i];
+    }
+
+    (:typecheck(false))
+    private function tintAt(items, i) as Lang.Number {
+        return items[i];
+    }
+
+    private function nowEpoch() as Number {
+        return Time.now().value();
+    }
+
+    private function signed(percent as Number) as String {
+        return (percent > 0 ? "+" : "") + percent.toString();
+    }
+
+    // One line answering "should I believe this number right now". An error
+    // beats everything else, because a stale reading with a failing fetch
+    // behind it is not the same situation as a stale reading nobody retried.
+    private function statusText(state as UvState) as String {
+        var error = state.errorText;
+        if (error != null) {
+            return error;
+        }
+        if (state.requestInFlight) {
+            return "Fetching...";
         }
 
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, (h * 0.84).toNumber(), Graphics.FONT_XTINY,
-                    "START = retry", Graphics.TEXT_JUSTIFY_CENTER);
+        var cache = state.cacheState();
+        if (cache == CACHE_ABSENT) {
+            return "No data yet";
+        }
+        if (cache == CACHE_EXPIRED) {
+            return "Cache expired";
+        }
+
+        var mins = state.ageMinutes();
+        if (mins == null) {
+            return "Cached";
+        }
+        if (mins < 1) {
+            return "Just now";
+        }
+        if (mins < 90) {
+            return mins.toString() + " min ago";
+        }
+        return (mins / 60).toString() + " h old";
+    }
+
+    private function statusTint(state as UvState) as Number {
+        if (state.errorText != null) {
+            return Graphics.COLOR_RED;
+        }
+        if (state.requestInFlight) {
+            return Graphics.COLOR_LT_GRAY;
+        }
+        var cache = state.cacheState();
+        if (cache == CACHE_CURRENT) {
+            return Graphics.COLOR_WHITE;
+        }
+        if (cache == CACHE_STALE) {
+            return Graphics.COLOR_YELLOW;
+        }
+        return Graphics.COLOR_ORANGE;
     }
 }

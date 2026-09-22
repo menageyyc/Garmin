@@ -10,9 +10,17 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## RESUMING? READ THIS FIRST
 
-**v0 IS COMPLETE.** Every external dependency it existed to prove is proven,
-live, in the simulator on 2026-09-22. Latest commit on the default branch
-`claude/garmin-uv-tracking-app-7y6gk6`. **Start v1.**
+**v0 IS COMPLETE. v1a IS WRITTEN AND HAS NEVER BEEN COMPILED.**
+
+v0's external dependencies are all proven live in the simulator on 2026-09-22.
+v1 was then split: **v1a** is the foreground half - altitude and albedo
+correction, settings, and the new two-page screen - and it is in the repo
+awaiting its first build. **v1b** is the background service, the cached
+refresh and the glance, and it is not written yet.
+
+**The immediate next action is Matt pressing F5 and reporting what the
+compiler says.** Nothing in v1a has been through a compiler. Expect errors;
+v0's first build was 19 of them.
 
 Two runs settled it:
 
@@ -68,8 +76,11 @@ Every value inside 0-3599, and the index advanced exactly when it should.
   errors in it are not current
 - `System.println` goes to the **Debug Console** tab, not Terminal
 
-**Next: v1** per the build plan - altitude and albedo correction, colour bands,
-glance, background refresh with caching, settings.
+**Next: compile v1a, then write v1b.** v1b is the background service, the
+30-minute cached refresh and the glance rewrite. Three platform facts it must
+be built around were established on 2026-09-22 and contradict the build plan's
+architecture diagram - see the session log entry for that date before starting
+it.
 
 **Do not re-litigate** anything in `CLAUDE.md`'s hard constraints or the
 "Rejected approaches" table below. Each was researched against primary sources
@@ -86,11 +97,17 @@ pushing elsewhere means he never receives the work.
 
 ## Current phase
 
-**v0 COMPLETE.** Compiles clean, runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
-(5.2.0), and fetches live UV from Open-Meteo over `HTTP 200` at both a night
-and a daylight position, with correct risk bands, colours and grid elevations.
+**v1a written, not compiled.** v0 is closed: it compiles clean, runs on epix
+Pro (Gen 2) 47mm / quatix 7 Pro (5.2.0), and fetches live UV from Open-Meteo
+over `HTTP 200` at both a night and a daylight position, with correct risk
+bands, colours and grid elevations.
 
-Next action: **start v1.** Nothing outstanding from v0.
+v1a adds the altitude and albedo correction, a cached hourly series that
+survives a failed fetch, surface and surroundings settings on both the watch
+and the phone, and a two-page screen - the reading first, diagnostics behind
+DOWN.
+
+Next action: **build it and report the errors.** Then v1b.
 
 ---
 
@@ -104,13 +121,16 @@ Next action: **start v1.** Nothing outstanding from v0.
 | 4 | Sun detection method | v2 design | **Answered: activity + manual session** |
 | 5 | Store-published or sideload-only | Review, health wording, licence | Open |
 | 6 | Which API level group does epix Pro sit under? | Target API level | **Answered: API 5.2. SDK 9.2.0 installed** |
-| 7 | App + glance + background memory budgets, from local SDK | Architecture limits | Open |
+| 7 | App + glance + background memory budgets, from local SDK | Architecture limits | **Partly answered:** the glance reported `~6.8/59.9 kB` on epix Pro, so the glance budget is about 60 kB, not the 32 kB commonly quoted. App and background budgets still unread |
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | **Answered: `epix2pro47mm` is correct - compiler accepted it** |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
 | 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | **ANSWERED 2026-09-22: YES, fully.** `HTTP 200` at night (Olathe, 0.0) and in daylight (Bangkok, 9.5 VERY HIGH). `elevation` correct and location-varying: 336 m vs 4 m |
 | 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | **Answered: yes** |
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
+| 14 | Does the phone-side App Settings editor show both list settings, and does the on-watch MENU route write the same value? | v1a settings | Open - test in simulator |
+| 15 | Does `Menu2` + `Menu2InputDelegate` behave as written on API 5.2? | v1a settings | Open - the first build will say |
+| 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
 
 ---
 
@@ -145,6 +165,16 @@ Next action: **start v1.** Nothing outstanding from v0.
 | 2026-09-22 | v0 refetches on every show, not only when no reading is cached | The old gate meant the app retried forever while broken and never once it worked - backwards for a build whose only job is exercising the fetch |
 | 2026-09-22 | Open-Meteo air-quality endpoint confirmed as the data source | Live `HTTP 200` with a correct grid elevation. No need for the GFS fallback; `BASE_URL` stays as it is |
 | 2026-09-22 | Poor GPS quality is logged, not gated on; 0,0 is a hard fail | A last-known fix is fine for a 40 km grid cell. 0,0 is the only case that silently misleads, because Open-Meteo answers for Null Island with a plausible tropical UV over HTTP 200 |
+| 2026-09-22 | v1 split into v1a (foreground) and v1b (background + glance) | Adding `(:background)` scoping to the app class is the same class of bug as the glance scoping problem that bit v0. Isolating it means a compile failure names itself instead of hiding in 600 new lines |
+| 2026-09-22 | The background service returns data via `Background.exit()`, never by writing storage | A background process gets its own snapshot of the object store, and cannot write Application Properties at all. This **corrects the build plan's architecture diagram**, which draws the service writing to storage directly |
+| 2026-09-22 | The background service reads the last-known position from storage; the foreground writes it | `Position` calls from a background process are reported to fail with permission errors. A 40 km grid cell does not need a fresh fix, and never powering the GPS from the background is also the right battery answer |
+| 2026-09-22 | `forecast_days=2`, not 1 | `forecast_days=1` returns the current UTC day, which cuts at 18:00 local in Calgary. About 500 extra bytes buys a cache that survives an evening with no phone, and v3's forward curve needs it anyway |
+| 2026-09-22 | A failed fetch leaves the cached reading on screen, marked stale | v0 cleared the reading on every attempt because its only job was exercising the pipe. An app that blanks the moment the phone wanders out of range is worse than one that says "two hours old" |
+| 2026-09-22 | An irregular hourly series is a failed fetch, not a degraded mode | Storing base-plus-step instead of a parallel timestamp array halves the storage, but is only safe if the step really is uniform. Verified across the whole array at parse time; refusing loudly beats mis-indexing quietly |
+| 2026-09-22 | Surface and surroundings are settable on the watch as well as the phone | They are situational - you change the surface on arriving at the ski hill, not on install. Both routes write the same `Application.Properties` store, so neither shadows the other |
+| 2026-09-22 | Skin type deferred from v1 to v2 | Nothing in v1 consumes MED; burn time and dose are v2 and v3. Shipping a setting that changes nothing visible teaches people to ignore the settings screen |
+| 2026-09-22 | Storage schema versioned; the first v1 run wipes the v0 store | v0 kept a single number under a different set of keys. There is nothing there worth migrating - it is refetched within seconds - and reading an old key with new expectations is how silent wrongness starts |
+| 2026-09-22 | Correction factors are clamped, the resulting UV index is not | Altitude delta is clamped to -1500..+4500 m and reflected fraction to 0.60, because both are products of imprecise inputs. The output is left alone: 12 on a glacier really can correct to 24, and clamping that away would hide the case the app exists for |
 
 ---
 
@@ -171,6 +201,11 @@ Next action: **start v1.** Nothing outstanding from v0.
 | Concluding the app is broken because the simulator shows `--` and does nothing | The simulator launches the glance by default, and the glance never fetches by design. Settings > Glance Launch Mode > Launch in Normal Mode |
 | Gating the fetch on `!hasReading()` | uvIndex is persisted, so one success permanently stopped the app calling the API |
 | Failing the fetch on `QUALITY_NOT_AVAILABLE` | Would block the simulator test for no safety gain. The 0,0 guard is what actually prevents a false positive |
+| Writing the forecast to storage from the background service | A background process gets its own snapshot of the object store; writes back are unreliable, and Application Properties cannot be written from the background at all. `Background.exit()` is the supported channel, capped near 8 kB |
+| Calling `Position.getInfo()` inside the background service | Reported to fail with permission and invocation errors from a background process. The foreground writes the last-known fix to storage and the background reads it |
+| Storing parallel arrays of timestamps and values | Doubles the storage for a series that is uniformly hourly. Base plus step, with uniformity verified at parse time, costs nothing and cannot drift |
+| Loading the setting labels through `Rez` in the glance | A `loadResource` call per draw inside a ~60 kB budget, returning a `Resource` the strict checker will not pass to a `String` parameter. Nine short English strings are cheaper, duplicated deliberately in `settings.xml` |
+| Two stacked `popView` calls to leave a submenu | Connect IQ promises nothing about unwinding two views inside one callback. The option delegate updates the parent row's sub-label in place and pops once |
 
 ---
 
@@ -517,3 +552,75 @@ Next action: **start v1.** Nothing outstanding from v0.
   city the watch altitude and the CAMS cell mean are close, so the delta is
   near zero. It matters on ski hills and mountain trails, where you sit well
   above a ~40 km cell average - exactly the cases this app exists for.
+
+### 2026-09-22 - v1a written. Three platform facts corrected the architecture
+- Read STATE.md, TOOLCHAIN.md, CLAUDE.md, all seven v0 source files and the
+  whole build plan before touching anything, then factchecked the Connect IQ
+  behaviour v1 rests on. **Three of the assumptions in the build plan's
+  architecture diagram are wrong**, and all three would have been found the
+  expensive way, mid-v1b, with a background service that silently did nothing.
+- **A background service cannot write to storage.** The diagram draws
+  `Background service -> Storage`. A background process gets its own snapshot
+  of the object store; experienced Connect IQ developers read from storage in
+  the background and never write to it, and Application **Properties** cannot
+  be written from the background at all. The supported channel is
+  `Background.exit(payload)` -> `AppBase.onBackgroundData()`, capped at
+  roughly **8 kB**.
+- **The good news that falls out of that:** `onBackgroundData()` fires in the
+  **glance** as well as the app, so the glance can take delivery of a fresh
+  forecast and persist it. That is what "useful with no phone in sight"
+  actually needs, and it survives the correction above.
+- **GPS from a background process is unreliable** - reported permission and
+  invocation failures even with the manifest right. v1b will read the
+  last-known fix from storage, written by the foreground. That is also the
+  right battery answer: the background never powers the receiver.
+- **Temporal events:** minimum interval is 300 seconds, only one registration
+  at a time, and `getServiceDelegate()` must return an **array** or the
+  simulator's manual trigger does not call `onTemporalEvent` at all. That last
+  one would have cost an evening chasing a service that looked dead.
+- **`Properties.setValue()` throws `InvalidKeyException`** for a key not
+  declared in the settings resources, so every key the app writes must appear
+  in `properties.xml` even if only the app ever touches it.
+- **The simulator's own App Settings Editor ignores `listEntry` values** when
+  opened from its File menu - a long-standing bug. Use the IDE-side editor.
+  Every setting in v1a is a list, so this matters immediately.
+
+**What v1a actually contains**
+
+| File | Job |
+|---|---|
+| `UvNum.mc` | Runtime narrowing in one place. JSON, storage, properties and menu ids all hand back `Any` |
+| `UvCorrection.mc` | The formula. Altitude and albedo factors, each clamped, plus signed percentages for the screen |
+| `UvForecast.mc` | The cached hourly series: base epoch + step + values, the fetch position and time, and the freshness verdict |
+| `UvSettings.mc` | Surface albedo and openness fraction, read from `Application.Properties`, clamped on every read |
+| `UvSettingsMenu.mc` | The on-watch MENU route into both settings |
+| `UvState.mc` | Rewritten around the forecast. Schema versioned; the first v1 run wipes the v0 store |
+| `UvClient.mc` | Rewritten `onResponse` - ingests the whole series instead of one value. GPS logic, timeout and the 0,0 guard are untouched, because they are proven |
+| `UvMainView.mc` | Two pages. Reading first, diagnostics behind DOWN |
+| `resources/settings/` | `properties.xml` and `settings.xml` for the phone-side editor |
+
+**Design changes worth knowing about**
+- **The number on screen is now the corrected one**, with the API's own value
+  shown under it. A term that rounds to 0% is omitted rather than printed, so
+  a city reads "no correction" and a ski hill reads "+9% altitude / +43% fresh
+  snow". The point of the app is visible or it is absent, never noise.
+- **`onShow()` no longer refetches unconditionally.** It fetches only when the
+  cache cannot answer for this hour or is over two hours old. START still
+  forces a fetch, which is also the test loop.
+- **Freshness is age and distance together.** Either alone misleads: a
+  five-minute-old fetch from the last town is not current, and a six-hour-old
+  fetch from right here is still roughly right. Thresholds are 25 km / 100 km
+  against the ~40 km CAMS cell, and 2 h / 12 h.
+
+**Self-review found four real defects before the commit**, all in code written
+in this session: a compound-condition ternary that would not have narrowed,
+`format("%d")` on a `Float`, a local inferred from `null` then reassigned from
+an `Any`, and - the one that mattered - the grid elevation being assigned
+before `ingest()` had accepted the series, which would have paired a new
+cell's elevation with the old cell's values on a refused fetch. That is a
+quietly wrong number rather than an error, which is the worst kind.
+
+- **NOT COMPILED.** No Garmin SDK in this environment. Every line here is
+  unverified against the compiler. The riskiest surfaces are `Menu2` /
+  `Menu2InputDelegate`, `Application.Properties`, and the settings resource
+  XML, none of which v0 exercised.

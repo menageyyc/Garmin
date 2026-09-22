@@ -8,10 +8,21 @@ class UvGuardApp extends Application.AppBase {
         AppBase.initialize();
     }
 
+    // The storage migration runs before anything reads storage, and only ever
+    // from the foreground or the glance. A background process cannot be relied
+    // on to write storage at all, so it must never be what runs a migration.
     function onStart(state as Dictionary or Null) as Void {
+        UvState.migrate();
     }
 
     function onStop(state as Dictionary or Null) as Void {
+    }
+
+    // Fires when the phone-side editor writes a setting. The views read
+    // Application.Properties fresh on every draw, so there is nothing to
+    // invalidate - a redraw is the whole job.
+    function onSettingsChanged() as Void {
+        WatchUi.requestUpdate();
     }
 
     // (:typecheck(false)) is load-bearing, not laziness. Annotating

@@ -2,16 +2,9 @@ import Toybox.Lang;
 import Toybox.Application;
 import Toybox.Time;
 
-// Shared state for v0.
-//
-// The glance and the app do not share memory - a glance runs as its own build
-// scope with its own budget - so anything both need goes through
-// Application.Storage. The app fetches and writes; the glance only reads.
-// Getting this wrong is the usual reason a glance shows stale or empty data
-// while the app looks fine.
-// Where the fix came from, so a failure is diagnosable at a glance. Declared at
-// file scope rather than inside the class - Monkey C is reliable about enums
-// here, less so nested in a class body.
+// Where the fix came from, so a failure is diagnosable at a glance. Declared
+// at file scope rather than inside the class - Monkey C is reliable about
+// enums here, less so nested in a class body.
 (:glance)
 enum FixSource {
     FIX_NONE = 0,
@@ -19,26 +12,37 @@ enum FixSource {
     FIX_LIVE = 2        // a real one-shot acquisition
 }
 
+// Shared state.
+//
+// The glance and the app do not share memory - a glance runs as its own build
+// scope with its own budget - so anything both need goes through
+// Application.Storage. The app fetches and writes; the glance only reads.
+// Getting this wrong is the usual reason a glance shows stale or empty data
+// while the app looks fine.
 (:glance)
 class UvState {
 
-    private const KEY_UV       = "uv";
-    private const KEY_UV_AT    = "uvAt";
-    private const KEY_LAT      = "lat";
-    private const KEY_LON      = "lon";
-    private const KEY_GRID_ELEV = "gridElev";
+    // Bumped whenever the shape of what is stored changes. v0 kept a single
+    // UV value under "uv"; v1 keeps a whole series under a different set of
+    // keys. Rather than leave the old keys orphaned - or worse, read one with
+    // the wrong expectations - the first v1 run wipes the store outright.
+    // There is nothing in a v0 store worth migrating: it held one number that
+    // is refetched within seconds.
+    private const KEY_LAT = "lat";
+    private const KEY_LON = "lon";
+    private const KEY_ALT = "wa";
 
+    // Where the watch currently thinks it is.
     public var latitude as Float or Null = null;
     public var longitude as Float or Null = null;
     public var fixSource as Number = FIX_NONE;
 
-    // Metres. watchAltitude is the barometer; gridElevation is what the API
-    // used for its cell. The difference drives the altitude correction in v1.
+    // Metres, barometric where available. Persisted because the glance has no
+    // way to take a fresh reading cheaply and the correction needs a number.
+    // Altitude changes slowly next to how often a glance is drawn.
     public var watchAltitude as Float or Null = null;
-    public var gridElevation as Float or Null = null;
 
-    public var uvIndex as Float or Null = null;
-    public var fetchedAtEpoch as Number or Null = null;
+    public var forecast as UvForecast;
 
     // Null means no request has completed yet. Not persisted - diagnostics are
     // about this run, not the last one.
@@ -62,69 +66,96 @@ class UvState {
     }
 
     function initialize() {
+        forecast = new UvForecast();
+    }
+
+    // Called once from the app before anything reads storage. Safe to call
+    // from the foreground only - a background process cannot be relied on to
+    // write storage, so it must never be the thing that runs a migration.
+    // Schema 1. The literal rather than a class const: a const declared in a
+    // class body is not something a static method is guaranteed to see, and
+    // this is not worth a compile cycle to find out. Bump both numbers
+    // together whenever the stored shape changes.
+    public static function migrate() as Void {
+        var stored = UvNum.asNumber(Application.Storage.getValue("sch"));
+        if (stored != null) {
+            if (stored == 1) {
+                return;
+            }
+        }
+        Application.Storage.clearValues();
+        Application.Storage.setValue("sch", 1);
     }
 
     // Storage can return null for any key, including one written earlier, so
     // every read is guarded rather than assumed.
     public function load() as Void {
-        uvIndex        = readFloat(KEY_UV);
-        gridElevation  = readFloat(KEY_GRID_ELEV);
-        latitude       = readFloat(KEY_LAT);
-        longitude      = readFloat(KEY_LON);
-
-        var at = Application.Storage.getValue(KEY_UV_AT);
-        fetchedAtEpoch = (at instanceof Number) ? at : null;
+        latitude      = UvNum.asFloat(Application.Storage.getValue(KEY_LAT));
+        longitude     = UvNum.asFloat(Application.Storage.getValue(KEY_LON));
+        watchAltitude = UvNum.asFloat(Application.Storage.getValue(KEY_ALT));
 
         if (latitude != null && longitude != null) {
             fixSource = FIX_CACHED;
         }
+
+        forecast.load();
     }
 
-    public function save() as Void {
-        Application.Storage.setValue(KEY_UV, uvIndex);
-        Application.Storage.setValue(KEY_UV_AT, fetchedAtEpoch);
+    public function savePosition() as Void {
         Application.Storage.setValue(KEY_LAT, latitude);
         Application.Storage.setValue(KEY_LON, longitude);
-        Application.Storage.setValue(KEY_GRID_ELEV, gridElevation);
-    }
-
-    private function readFloat(key as String) as Float or Null {
-        var v = Application.Storage.getValue(key);
-        if (v == null) {
-            return null;
-        }
-        // Storage round-trips numerics loosely; normalise rather than trust.
-        if (v instanceof Float || v instanceof Number || v instanceof Double) {
-            return v.toFloat();
-        }
-        return null;
+        Application.Storage.setValue(KEY_ALT, watchAltitude);
     }
 
     public function hasPosition() as Boolean {
         return latitude != null && longitude != null;
     }
 
-    public function hasReading() as Boolean {
-        return uvIndex != null;
+    // The API's own number for this hour, uncorrected.
+    public function rawNow() as Float or Null {
+        return forecast.valueAt(Time.now().value());
+    }
+
+    // What the correction makes of it. Null whenever the cache cannot speak
+    // for this hour, which the view renders as "--" rather than as zero -
+    // "no data" and "no UV" are different claims and must not look alike.
+    public function effectiveNow() as Float or Null {
+        var raw = rawNow();
+        if (raw == null) {
+            return null;
+        }
+        return UvCorrection.effective(raw,
+                                      watchAltitude,
+                                      forecast.gridElevation,
+                                      UvSettings.albedo(),
+                                      UvSettings.fraction());
+    }
+
+    public function cacheState() as Number {
+        return forecast.state(Time.now().value(), latitude, longitude);
+    }
+
+    // Minutes since the cached series was fetched, for the staleness line.
+    public function ageMinutes() as Number or Null {
+        var secs = forecast.ageSeconds(Time.now().value());
+        if (secs == null) {
+            return null;
+        }
+        return (secs / 60).toNumber();
     }
 
     // Altitude the API assumed, versus where you actually are. Positive means
     // you are above the grid cell and are getting more UV than it reports.
     public function altitudeDelta() as Float or Null {
-        if (watchAltitude == null || gridElevation == null) {
+        var wa = watchAltitude;
+        if (wa == null) {
             return null;
         }
-        return watchAltitude - gridElevation;
-    }
-
-    // Minutes since the reading was taken, for a staleness hint. v1 turns this
-    // into a real stale/fresh distinction once the background fetch exists.
-    public function ageMinutes() as Number or Null {
-        if (fetchedAtEpoch == null) {
+        var ge = forecast.gridElevation;
+        if (ge == null) {
             return null;
         }
-        var delta = Time.now().value() - fetchedAtEpoch;
-        return (delta / 60).toNumber();
+        return wa - ge;
     }
 
     public function clearError() as Void {

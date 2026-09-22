@@ -1,3 +1,18 @@
 <strings>
     <string id="AppName">UV Tracker</string>
+
+    <string id="SurfaceTitle">Surface</string>
+    <string id="SurfacePrompt">What you are standing on. Reflected UV adds to what comes straight down, and fresh snow reflects nearly thirty times as much as grass.</string>
+    <string id="SurfaceGrass">Grass or ground</string>
+    <string id="SurfaceConcrete">Concrete or urban</string>
+    <string id="SurfaceWater">Water</string>
+    <string id="SurfaceSand">Dry sand</string>
+    <string id="SurfaceOldSnow">Snow, old or melting</string>
+    <string id="SurfaceFreshSnow">Snow, fresh</string>
+
+    <string id="OpennessTitle">Surroundings</string>
+    <string id="OpennessPrompt">How much of that surface you can actually see. An open piste reflects at you from every direction; a forest or a narrow street blocks most of it.</string>
+    <string id="OpennessOpen">Open: piste, beach, open water</string>
+    <string id="OpennessPartly">Partly open: scattered trees</string>
+    <string id="OpennessEnclosed">Enclosed: forest, valley, street</string>
 </strings>

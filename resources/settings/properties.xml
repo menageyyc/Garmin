@@ -1,0 +1,16 @@
+<properties>
+    <!--
+      Defaults, used only when the property does not already exist. Once the
+      wearer has set a value - from the on-watch menu or from Garmin Connect -
+      that value wins and this file is ignored.
+
+      Grass and open surroundings give a correction of 0.5 * 0.03 = +1.5%,
+      which is the right default: negligible, so an untouched install shows
+      essentially the API's own number rather than a number nobody asked for.
+
+      Application.Properties.setValue throws InvalidKeyException for a key that
+      is not declared here, so every key UvSettings writes must appear below.
+    -->
+    <property id="surface" type="number">0</property>
+    <property id="openness" type="number">0</property>
+</properties>

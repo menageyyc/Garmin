@@ -2,9 +2,15 @@ import Toybox.Lang;
 import Toybox.WatchUi;
 import Toybox.Graphics;
 
-// The glance reads the last reading the app persisted to storage. It never
-// fetches: glances run under a tight memory budget and are drawn often, so
-// network work belongs in the background service, which arrives in v1.
+// The glance reads the cached series the app persisted and applies the same
+// correction the app does, so the two never disagree. It never fetches:
+// glances run under a tight memory budget and are drawn often, so network work
+// belongs in the background service, which arrives in v1b.
+//
+// The altitude it corrects with is the last one the app recorded rather than a
+// fresh barometer reading. Altitude changes slowly next to how often a glance
+// is drawn, and taking a sensor reading on every draw is not a trade a glance
+// budget can afford.
 //
 // A glance cannot be tapped to toggle anything - input delegate methods are not
 // invoked while a glance view is running - so this stays purely informational.
@@ -25,15 +31,21 @@ class UvGlanceView extends WatchUi.GlanceView {
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(0, (h * 0.10).toNumber(), Graphics.FONT_XTINY, "UV", Graphics.TEXT_JUSTIFY_LEFT);
 
-        var uv = state.uvIndex;
-        if (uv != null) {
-            dc.setColor(UvScale.colour(uv), Graphics.COLOR_TRANSPARENT);
-            dc.drawText(0, (h * 0.42).toNumber(), Graphics.FONT_TINY,
-                        uv.format("%.1f") + "  " + UvScale.riskBand(uv),
-                        Graphics.TEXT_JUSTIFY_LEFT);
-        } else {
+        var uv = state.effectiveNow();
+        if (uv == null) {
             dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
             dc.drawText(0, (h * 0.42).toNumber(), Graphics.FONT_TINY, "--", Graphics.TEXT_JUSTIFY_LEFT);
+            return;
         }
+
+        // An old reading is marked rather than hidden. Hiding it would leave
+        // the glance blank exactly when the phone has wandered off, which is
+        // when a rough number is most useful.
+        var suffix = (state.cacheState() == CACHE_CURRENT) ? "" : " (old)";
+
+        dc.setColor(UvScale.colour(uv), Graphics.COLOR_TRANSPARENT);
+        dc.drawText(0, (h * 0.42).toNumber(), Graphics.FONT_TINY,
+                    uv.format("%.1f") + "  " + UvScale.riskBand(uv) + suffix,
+                    Graphics.TEXT_JUSTIFY_LEFT);
     }
 }
