@@ -271,6 +271,19 @@ in a way that looks like an API fault rather than a firewall.
 document used to send you. Without a position the app correctly reports
 "No position" and never calls the API.
 
+**It is one field, not two.** The dialog takes latitude and longitude together
+as a single comma-separated string in decimal degrees, and rejects anything
+else with *"Please enter position in latitude, longitude format in degrees"*.
+Six decimal places, comma and space:
+
+```
+13.756331, 100.501765
+```
+
+The simulator's own default is `38.856147, -94.800953` — Olathe, Kansas, which
+`Position.getInfo()` already returns as a cached fix, so a fetch works with no
+position set at all.
+
 If the position line still reads "No position" after setting one, fall back to
 **Simulation → FIT Data → Simulate Data**. Some builds of the simulator only
 populate position once data is being generated or played back.

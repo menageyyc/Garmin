@@ -31,18 +31,26 @@ has not confirmed:
    It defaults to the glance, which renders correctly and then does nothing,
    because the glance never fetches. Small left-aligned text and a memory
    readout near `6.8/59.9kB` means you are on the glance
-3. **Settings → Set Position** to somewhere in daylight. The simulator's
-   default is Olathe, Kansas (38.86, -94.80), which is fine but was at night.
-   Pick a longitude near solar noon for the current UTC time
+3. **Settings → Set Position** to somewhere in daylight. It is ONE field
+   taking both numbers as a comma-separated decimal-degrees string, e.g.
+   `13.756331, 100.501765`; anything else draws "Please enter position in
+   latitude, longitude format in degrees". The simulator's default is Olathe,
+   Kansas (`38.856147, -94.800953`), fine but at night. Pick a longitude near
+   solar noon for the current UTC time
 4. Press **START** to refetch
 5. **Read the Debug Console tab** - not Terminal, which is the build task.
    `System.println` output lands there
 
-**What the daylight test settles:** UV read `0.0` at 23:30 local, which is
-correct, but every night hour returns 0.0 - so a wrong hour index would look
-identical. The UTC alignment in `currentHourIndex` is NOT yet confirmed, and
-neither is the non-zero value path or any colour band above green. The console
-line to check is:
+**The UTC alignment does NOT need daylight to check.** `slot+Ns` is
+`now - times[idx]` and is logged on every successful fetch, including the
+night-time Olathe one. Between 0 and 3599 means `currentHourIndex` picked the
+right hour, whatever the UV value. Read the existing console output before
+setting up anything new.
+
+**What daylight adds, and it is minor:** UV read `0.0`, which may have arrived
+as integer `0`, so the `Lang.Float` branch of `asFloat` is untested and only
+the green colour band has been exercised. Worth doing; does not block v1. The
+console line to check is:
 
 ```
 UV OK uv=8.20 gridElev=15 m idx=4/24 slot+3300s
