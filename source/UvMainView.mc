@@ -123,6 +123,7 @@ class UvMainView extends WatchUi.View {
         }
 
         drawHint(dc, w, h);
+        drawPageDots(dc, w, h);
     }
 
     // The old hint read "START refresh  MENU set" and the final character fell
@@ -149,6 +150,30 @@ class UvMainView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, (h * 0.86).toNumber(), Graphics.FONT_XTINY,
                     text, Graphics.TEXT_JUSTIFY_CENTER);
+    }
+
+    // Nothing on the reading page said other pages existed, and the first live
+    // test found exactly that - the settings page was unreachable because it
+    // was invisible. Three dots is the platform idiom and the space is free:
+    // the app peaks at 23.3 kB of a 763.6 kB budget, measured on 2026-09-22.
+    private function drawPageDots(dc as Graphics.Dc, w as Number, h as Number) as Void {
+        var r = (w * 0.009).toNumber();
+        if (r < 2) {
+            r = 2;
+        }
+        var gap = (w * 0.042).toNumber();
+        var y = (h * 0.93).toNumber();
+        var first = w / 2 - gap;
+
+        for (var i = 0; i < PAGE_COUNT; i += 1) {
+            if (i == _page) {
+                dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+                dc.fillCircle(first + (i * gap), y, r);
+            } else {
+                dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+                dc.drawCircle(first + (i * gap), y, r);
+            }
+        }
     }
 
     private function drawReading(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {

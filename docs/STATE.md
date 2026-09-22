@@ -787,3 +787,29 @@ snow open is +42% and still shows; grass open is +1% and does not.
 **Not a bug:** the ten repeated fetches in the console are START presses. The
 refetch-on-show gate is working - `onShow()` only fetches when the cache cannot
 answer for this hour, and it never fired.
+
+### 2026-09-22 - Memory measured. Question 7 answered for the app
+- **App budget on epix Pro (Gen 2) 47mm is 763.6 kB.** v1a peaks at **23.3 kB**
+  - about 3%, so roughly 33x headroom. Code 9,584 bytes, data 3,905 bytes, 61
+  peak objects of 65,535. Far more room than assumed; the app scope is nowhere
+  near a constraint and design decisions should stop pretending it is.
+- Glance budget was observed at **59.9 kB** in v0, using about 6.8 kB.
+- **The background budget is still unknown and is the only one that matters
+  for v1b.** Commonly quoted as 32 kB for this generation. The v1b build will
+  report it, and the fetch has to fit: 48 timestamps plus 48 floats parsed into
+  a Monkey C Dictionary, on top of the response buffer. `timeformat=unixtime`
+  and a single `hourly` variable are already the mitigations; if it does not
+  fit, the background drops to `forecast_days=1` and the foreground keeps 2.
+- **`onMenu()` fires on this device** - confirmed with the simulator's **M**
+  keyboard shortcut. On hardware MENU is a long press of UP, still unverified.
+  The settings page stays regardless: forum reports of `onMenu()` failing are
+  specifically about real watches, and a feature with one flaky door is a
+  feature that is sometimes missing.
+- **Discoverability failure found the hard way.** Nothing on the reading page
+  indicated other pages existed, so the settings page was unreachable by
+  anyone who had not read the commit message. Added the platform-standard
+  three-dot page indicator. The memory measurement above is what makes that an
+  easy call rather than a trade.
+- **Stale-binary tell, updated:** the hint is now per-page and short. If the
+  screen reads `START refresh  MENU set` with the final letter clipped off the
+  edge, or shows no page dots, the simulator is serving a pre-2026-09-22 `.prg`.

@@ -413,12 +413,17 @@ what you are looking at is different, and there is a settings route now.
 | Button | Does |
 |---|---|
 | **START** | Force a refresh. Always fetches, even when the cache is fine |
-| **DOWN** (or UP) | Turn the page: reading <-> diagnostics |
-| **MENU** | Surface and surroundings settings, on the watch |
+| **DOWN** / **UP** | Turn the page: reading -> diagnostics -> settings |
+| **MENU** | Same settings, as a shortcut. **Long press of UP** on this hardware; in the simulator the keyboard shortcut is **M** |
 
-The bottom of both pages reads `START refresh  MENU set` as a reminder. **If
-that line is missing you are running a stale binary** - stop the debug session
+Three dots at the bottom show which page you are on. On the settings page,
+START opens the picker instead of refreshing - the hint line says which.
+
+The hint line is per-page: `START refresh`, `DOWN for settings`, `START to
+change`. **If it instead reads `START refresh  MENU set` with the last letter
+clipped off the edge, you are running a stale binary** - stop the debug session
 before pressing F5, or the simulator serves the old `.prg` without rebuilding.
+Three dots below it show the page. No dots means a stale binary too.
 
 ### Page 1 - the reading
 
