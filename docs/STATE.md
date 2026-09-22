@@ -10,87 +10,84 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## RESUMING? READ THIS FIRST
 
-**Where things stand: v0 WORKS END TO END.** `HTTP 200 OK` in the simulator on
-2026-09-22. Position, altitude, the Open-Meteo fetch, JSON parse, grid
-elevation and the on-screen diagnostics all work. The toolchain is fully
-proven. Latest commit `0ea4ac2`, and it compiles clean.
+**v0 IS COMPLETE.** Every external dependency it existed to prove is proven,
+live, in the simulator on 2026-09-22. Latest commit on the default branch
+`claude/garmin-uv-tracking-app-7y6gk6`. **Start v1.**
 
-**Question 12 is ANSWERED.** The CAMS air-quality endpoint returns UV to a
-Connect IQ client as designed, and the response carries a correct top-level
-`elevation` (336 m for Olathe, Kansas, which sits at 320-340 m). The GFS
-fallback is not needed. `BASE_URL` stays as it is. Do not revisit this.
+Two runs settled it:
 
-**The immediate next action** is a daylight test, which is the ONLY thing v0
-has not confirmed:
+| | Olathe, KS (night) | Bangkok (solar noon) |
+|---|---|---|
+| UV | `0.0` LOW, green | `9.5` VERY HIGH, red |
+| Position | `38.86, -94.80 (cached)` | `13.76, 100.50 (cached)` |
+| Grid elevation | 336 m (actual 320-340) | 4 m (actual ~2) |
+| HTTP | `200 OK` | `200 OK` |
 
-1. `update.bat`, then **stop any running debug session** (the red square in VS
-   Code) before pressing F5. F5 with a session already live does not rebuild,
-   and the simulator silently keeps serving the stale `.prg`. This cost real
-   time on 2026-09-22
-2. In the simulator: **Settings → Glance Launch Mode → Launch in Normal Mode**.
-   It defaults to the glance, which renders correctly and then does nothing,
-   because the glance never fetches. Small left-aligned text and a memory
-   readout near `6.8/59.9kB` means you are on the glance
-3. **Settings → Set Position** to somewhere in daylight. It is ONE field
-   taking both numbers as a comma-separated decimal-degrees string, e.g.
-   `13.756331, 100.501765`; anything else draws "Please enter position in
-   latitude, longitude format in degrees". The simulator's default is Olathe,
-   Kansas (`38.856147, -94.800953`), fine but at night. Pick a longitude near
-   solar noon for the current UTC time
-4. Press **START** to refetch
-5. **Read the Debug Console tab** - not Terminal, which is the build task.
-   `System.println` output lands there
+**Do not re-open any of this:**
+- The CAMS air-quality endpoint returns UV to a Connect IQ client. `BASE_URL`
+  stays as it is; the GFS fallback is not needed
+- The response carries a top-level `elevation`, and it varies correctly by
+  location - 336 m vs 4 m is not a constant or a parse artifact. v1's altitude
+  correction has a real baseline
+- Both `asFloat` branches are exercised: integer `0` and genuine float `9.5`
+- Colour bands work at both ends of the range tested
+- The measured-font layout holds; no collision between the number and the band
 
-**The UTC alignment does NOT need daylight to check.** `slot+Ns` is
-`now - times[idx]` and is logged on every successful fetch, including the
-night-time Olathe one. Between 0 and 3599 means `currentHourIndex` picked the
-right hour, whatever the UV value. Read the existing console output before
-setting up anything new.
-
-**What daylight adds, and it is minor:** UV read `0.0`, which may have arrived
-as integer `0`, so the `Lang.Float` branch of `asFloat` is untested and only
-the green colour band has been exercised. Worth doing; does not block v1. The
-console line to check is:
+**The one loose end**, and it is minor: `slot+Ns` from the Debug Console has
+never been read. A *gross* misalignment in `currentHourIndex` is ruled out
+behaviourally - index 5 at 05:11 UTC is 12:00 Bangkok local, and a near-peak
+9.5 is what solar noon should give. But the UV curve is flat within an hour or
+two of noon, so a **+/-1-2 hour offset would look identical**. Read the line
+once, any time, from any successful fetch:
 
 ```
-UV OK uv=8.20 gridElev=15 m idx=4/24 slot+3300s
+UV OK uv=9.50 gridElev=4 m idx=5/24 slot+660s
 ```
 
-`slot+Ns` must land between 0 and 3599. Outside that, `currentHourIndex` is
-picking the wrong hour, and that would silently corrupt v1's burn-time estimate.
+`slot+Ns` must be 0-3599. Do this before v1 leans on the hour index for a
+burn-time estimate.
 
-**After that:** v1 per the build plan - altitude and albedo correction, colour
-bands, glance, background refresh with caching, settings.
-
-**Simulator facts learned the hard way** (all cost time on 2026-09-22):
-- Default position is Olathe, Kansas, returned by `Position.getInfo()` as a
-  cached fix. No `Set Position` needed to get a fetch going
+**Simulator facts, all learned the hard way on 2026-09-22:**
+- **Settings → Glance Launch Mode → Launch in Normal Mode.** It defaults to the
+  glance, which renders correctly and then does nothing, because the glance
+  never fetches. Small left-aligned text and `~6.8/59.9kB` memory = glance
+- **Settings → Set Position** is ONE field taking both numbers as a
+  comma-separated decimal-degrees string: `13.756331, 100.501765`. Anything
+  else draws "Please enter position in latitude, longitude format in degrees"
+- Default position is Olathe, Kansas (`38.856147, -94.800953`), returned by
+  `Position.getInfo()` as a cached fix. A fetch works with no position set
 - Altitude works without FIT playback and reads about `-18 m`
-- The simulator launches the **glance** by default, not the app
-- The build Terminal keeps historical scrollback. Builds 1-5 in it are the old
-  `19 -> 3 -> 2 -> 2 -> 0` sequence from a previous session, not current errors
+- **Stop any running debug session before F5.** F5 with a session already live
+  does not rebuild and the simulator silently serves the stale `.prg`
+- The build Terminal keeps historical scrollback. Old `19 -> 3 -> 2 -> 2 -> 0`
+  errors in it are not current
+- `System.println` goes to the **Debug Console** tab, not Terminal
+
+**Next: v1** per the build plan - altitude and albedo correction, colour bands,
+glance, background refresh with caching, settings.
 
 **Do not re-litigate** anything in `CLAUDE.md`'s hard constraints or the
 "Rejected approaches" table below. Each was researched against primary sources
 and cost real time to establish.
 
-**Working with Matt:** he is technically fluent but does not write code. Explain
+**Working with Matt:** technically fluent but does not write code. Explain
 reasoning in plain language. He builds and tests on his own Windows machine -
-Claude's sandbox reaches nothing external except `WebSearch`. He pulls changes
-by double-clicking `update.bat`, so push and tell him to run it. **The repo's
-default branch is `claude/garmin-uv-tracking-app-7y6gk6` and that is what his
-clone tracks** - push there, or he will not receive the work.
+Claude's sandbox reaches nothing external except `WebSearch`. He pulls by
+double-clicking `update.bat`. **Push to the default branch
+`claude/garmin-uv-tracking-app-7y6gk6`** - that is what his clone tracks, and
+pushing elsewhere means he never receives the work.
 
 ---
 
 ## Current phase
 
-**v0 IS DONE, pending one confirmation.** Compiles clean, runs on epix Pro
-(Gen 2) 47mm / quatix 7 Pro (5.2.0), and fetches live UV from Open-Meteo over
-`HTTP 200`. Every external dependency v0 exists to prove is proven.
+**v0 COMPLETE.** Compiles clean, runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
+(5.2.0), and fetches live UV from Open-Meteo over `HTTP 200` at both a night
+and a daylight position, with correct risk bands, colours and grid elevations.
 
-Next action: a daylight test to confirm the UTC hour alignment in
-`currentHourIndex`, then start v1.
+Next action: **start v1.** One minor loose end carried forward - read `slot+Ns`
+from the Debug Console to rule out a small UTC hour offset before v1 uses the
+hour index for burn-time estimates.
 
 ---
 
@@ -108,7 +105,7 @@ Next action: a daylight test to confirm the UTC hour alignment in
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | **Answered: `epix2pro47mm` is correct - compiler accepted it** |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
-| 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | **ANSWERED 2026-09-22: YES.** `HTTP 200 OK` in the simulator. Returns `uv_index` and a correct top-level `elevation` (336 m for Olathe, KS). Daylight value still to confirm |
+| 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | **ANSWERED 2026-09-22: YES, fully.** `HTTP 200` at night (Olathe, 0.0) and in daylight (Bangkok, 9.5 VERY HIGH). `elevation` correct and location-varying: 336 m vs 4 m |
 | 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | **Answered: yes** |
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 
@@ -468,3 +465,27 @@ Next action: a daylight test to confirm the UTC hour alignment in
   would look identical. The UTC alignment in `currentHourIndex` is NOT yet
   confirmed. Needs a daylight position and the `slot+Ns` figure from the
   console.
+
+### 2026-09-22 - v0 COMPLETE
+- Bangkok at solar noon: **UV 9.5, VERY HIGH, red, `HTTP 200 OK`,
+  `13.76, 100.50 (cached)`, `-18 m  -22 vs grid`.** Everything v0 was built to
+  prove is now proven live.
+- **Grid elevation varies correctly by location.** Olathe implied 336 m against
+  an actual 320-340 m; Bangkok implied 4 m against an actual ~2 m. Two very
+  different values, both right, which rules out a constant or a parse artifact
+  and gives v1's altitude correction a real baseline.
+- **Both `asFloat` branches exercised.** Olathe's `0.0` almost certainly arrived
+  as integer `0` (the `Lang.Number` branch); Bangkok's `9.5` is a genuine float.
+  The dual-branch narrowing written on 2026-09-21 was justified.
+- **Colour bands confirmed at both ends tested** - green/LOW at 0.0, red/VERY
+  HIGH at 9.5, matching the WHO thresholds in `UvScale`.
+- **The measured-font layout holds.** No collision between the number and the
+  band label at either a one-character or three-character reading.
+- **UTC alignment: gross error ruled out, small offset not.** At 05:11 UTC the
+  series index is 5, which is 12:00 Bangkok local - solar noon - and a
+  near-peak 9.5 is exactly what that index should carry. But the UV curve is
+  flat within an hour or two of noon, so a +/-1-2 hour offset would look the
+  same. `slot+Ns` from the Debug Console remains unread and should be checked
+  before v1 uses the hour index for burn-time estimates. Expected ~660s.
+- Nothing in v0 is outstanding beyond that one console line. **Next session
+  starts v1.**
