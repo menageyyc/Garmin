@@ -1,7 +1,12 @@
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-// START refetches in place, DOWN turns the page, MENU opens settings.
+// START acts on the current page, DOWN and UP turn pages, MENU opens settings.
+//
+// MENU is kept, but it is not the only way in. On this hardware MENU is a long
+// press of UP, and Garmin's forums carry reports of onMenu() never firing on
+// some fenix and epix models. The settings page reached by DOWN is the route
+// that cannot fail.
 //
 // Deliberately not (:glance) annotated. It belongs to the app scope alongside
 // UvMainView, and both are excluded from the glance build together, so there
@@ -17,7 +22,7 @@ class UvMainDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onSelect() as Boolean {
-        _view.refetch();
+        _view.onSelectPressed();
         return true;
     }
 
@@ -27,7 +32,7 @@ class UvMainDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onPreviousPage() as Boolean {
-        _view.nextPage();
+        _view.prevPage();
         return true;
     }
 

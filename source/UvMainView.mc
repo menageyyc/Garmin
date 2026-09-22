@@ -23,6 +23,18 @@ import Toybox.Time;
 // thread of control could clear it between the two calls.
 class UvMainView extends WatchUi.View {
 
+    private const PAGE_READING = 0;
+    private const PAGE_DIAGNOSTICS = 1;
+    private const PAGE_SETTINGS = 2;
+    private const PAGE_COUNT = 3;
+
+    // Below this, a correction term is not worth a line. k_alt is a plus or
+    // minus 30% assumption and the albedo figures are mid-range estimates, so
+    // anything under 2% is well inside the model's own error bars. Printing
+    // "+1%" claims a precision this does not have, and on the default settings
+    // - grass, open - it would be the permanent state of the screen.
+    private const MIN_SHOWN_PERCENT = 2;
+
     private var _client as UvClient or Null = null;
     private var _page as Number = 0;
 
@@ -42,8 +54,27 @@ class UvMainView extends WatchUi.View {
     }
 
     public function nextPage() as Void {
-        _page = (_page + 1) % 2;
+        _page = (_page + 1) % PAGE_COUNT;
         WatchUi.requestUpdate();
+    }
+
+    public function prevPage() as Void {
+        _page = (_page + PAGE_COUNT - 1) % PAGE_COUNT;
+        WatchUi.requestUpdate();
+    }
+
+    // START means refresh everywhere except the settings page, where it opens
+    // the picker. The settings menu also hangs off MENU, but MENU is a long
+    // press of UP on this hardware and Garmin's own forums carry reports of
+    // onMenu() never firing on some fenix and epix models. A feature reachable
+    // only through a button behaviour with that track record is a feature that
+    // is sometimes missing, so it gets a second route that cannot fail.
+    public function onSelectPressed() as Void {
+        if (_page == PAGE_SETTINGS) {
+            UvSettingsMenu.show();
+            return;
+        }
+        refetch();
     }
 
     // Also reached from the START button, via UvMainDelegate.
@@ -83,15 +114,41 @@ class UvMainView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_BLACK);
         dc.clear();
 
-        if (_page == 1) {
+        if (_page == PAGE_DIAGNOSTICS) {
             drawDiagnostics(dc, w, h, state);
+        } else if (_page == PAGE_SETTINGS) {
+            drawSettings(dc, w, h);
         } else {
             drawReading(dc, w, h, state);
         }
 
+        drawHint(dc, w, h);
+    }
+
+    // The old hint read "START refresh  MENU set" and the final character fell
+    // off the edge of the screen. At 86% of the way down a round 416 px face
+    // the chord is about 288 px, not the full width - roughly 0.69 w. Measure
+    // the string and fall back to a shorter one rather than assuming, so the
+    // 390 and 454 px siblings stay free.
+    private function drawHint(dc as Graphics.Dc, w as Number, h as Number) as Void {
+        var text = "START refresh";
+        var brief = "START";
+        if (_page == PAGE_DIAGNOSTICS) {
+            text = "DOWN for settings";
+            brief = "DOWN = set";
+        } else if (_page == PAGE_SETTINGS) {
+            text = "START to change";
+            brief = "START";
+        }
+
+        var available = (w * 0.68).toNumber();
+        if (dc.getTextWidthInPixels(text, Graphics.FONT_XTINY) > available) {
+            text = brief;
+        }
+
         dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, (h * 0.86).toNumber(), Graphics.FONT_XTINY,
-                    "START refresh  MENU set", Graphics.TEXT_JUSTIFY_CENTER);
+                    text, Graphics.TEXT_JUSTIFY_CENTER);
     }
 
     private function drawReading(dc as Graphics.Dc, w as Number, h as Number, state as UvState) as Void {
@@ -142,15 +199,18 @@ class UvMainView extends WatchUi.View {
         var altPct = UvCorrection.altitudePercent(state.watchAltitude, state.forecast.gridElevation);
         var albPct = UvCorrection.albedoPercent(UvSettings.albedo(), UvSettings.fraction());
 
-        if (altPct != 0) {
+        var showAlt = (altPct >= MIN_SHOWN_PERCENT) || (altPct <= -MIN_SHOWN_PERCENT);
+        var showAlb = (albPct >= MIN_SHOWN_PERCENT) || (albPct <= -MIN_SHOWN_PERCENT);
+
+        if (showAlt) {
             lines.add(signed(altPct) + "% altitude");
             tints.add(Graphics.COLOR_LT_GRAY);
         }
-        if (albPct != 0) {
+        if (showAlb) {
             lines.add(signed(albPct) + "% " + UvSettings.surfaceName(UvSettings.surface()).toLower());
             tints.add(Graphics.COLOR_LT_GRAY);
         }
-        if (altPct == 0 && albPct == 0 && raw != null) {
+        if (!showAlt && !showAlb && raw != null) {
             lines.add("no correction");
             tints.add(Graphics.COLOR_DK_GRAY);
         }
@@ -201,6 +261,26 @@ class UvMainView extends WatchUi.View {
 
         lines.add(statusText(state));
         tints.add(statusTint(state));
+
+        drawStack(dc, w, h, top + dc.getFontHeight(Graphics.FONT_XTINY), lines, tints);
+    }
+
+    // The settings page exists so the pickers are reachable without MENU. It
+    // also shows what the current pair is actually worth, which is the honest
+    // answer to "why is this app's number different from the others".
+    private function drawSettings(dc as Graphics.Dc, w as Number, h as Number) as Void {
+        var top = (h * 0.16).toNumber();
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, top, Graphics.FONT_XTINY, "SETTINGS", Graphics.TEXT_JUSTIFY_CENTER);
+
+        var albPct = UvCorrection.albedoPercent(UvSettings.albedo(), UvSettings.fraction());
+
+        var lines = ["Surface", UvSettings.surfaceName(UvSettings.surface()),
+                     "Surroundings", UvSettings.opennessName(UvSettings.openness()),
+                     "reflected " + signed(albPct) + "%"];
+        var tints = [Graphics.COLOR_DK_GRAY, Graphics.COLOR_WHITE,
+                     Graphics.COLOR_DK_GRAY, Graphics.COLOR_WHITE,
+                     Graphics.COLOR_LT_GRAY];
 
         drawStack(dc, w, h, top + dc.getFontHeight(Graphics.FONT_XTINY), lines, tints);
     }

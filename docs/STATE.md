@@ -748,3 +748,42 @@ quietly wrong number rather than an error, which is the worst kind.
   permission with no service behind it is the sort of thing store review asks
   about.
 - Rule added to `CLAUDE.md`.
+
+### 2026-09-22 - v1a RUNS. Three fixes from the first live look
+- **Clean build, both pages render, the pipe holds.** `HTTP 200`,
+  `idx 15/48` so `forecast_days=2` took, `gridElev=4 m` at Bangkok,
+  `slot+3171s` inside the hour. Index 15 is 15:00 UTC, which is 22:00 Bangkok
+  local, so `raw=0.00` is correct - **the UTC alignment survived the move to a
+  two-day series.**
+- **The correction arithmetic is live and correct.** `alt=0%` is right: -18 m
+  watch against a 4 m grid is a 22 m delta, 0.2%, which truncates to zero.
+  `albedo=1%` is grass 0.03 times open 0.5 = 1.5%. Both branches computed, both
+  right.
+- **`Menu2`, `Application.Properties`, `catch (e)` and `MenuItem`'s
+  four-argument constructor all compiled and ran.** Those were the four
+  surfaces v0 never touched. They are no longer unknowns.
+
+**Fix 1 - settings were unreachable.** MENU did nothing Matt could use. On this
+hardware MENU is a **long press of UP**, and the simulator's shortcut is the
+**M key**; a short press is `onPreviousPage`. But Garmin's own forums carry
+reports of `onMenu()` never firing on some fenix and epix models, so a feature
+reachable only that way is a feature that is sometimes missing. Added a **third
+page** - reading, diagnostics, settings - where START opens the picker. DOWN
+cycles. `onMenu()` is kept as well; it is now the shortcut rather than the only
+door.
+
+**Fix 2 - the bottom hint was clipped.** `START refresh  MENU set` lost its
+final character. At 86% down a round 416 px face the chord is about 288 px, not
+416 - roughly `0.69 w` - and 23 characters of `FONT_XTINY` is about 290 px. The
+hint is now per-page, measured with `getTextWidthInPixels`, and falls back to a
+shorter string if it does not fit, so the 390 and 454 px siblings stay free.
+
+**Fix 3 - "+1% grass" was noise.** On the default settings that line is the
+permanent state of the screen, and it claims a precision the model does not
+have: `k_alt` is a plus-or-minus-30% assumption and the albedo figures are
+mid-range estimates. A correction term is now only printed at 2% or more. Fresh
+snow open is +42% and still shows; grass open is +1% and does not.
+
+**Not a bug:** the ten repeated fetches in the console are START presses. The
+refetch-on-show gate is working - `onShow()` only fetches when the cache cannot
+answer for this hour, and it never fired.
