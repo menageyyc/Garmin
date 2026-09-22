@@ -61,6 +61,12 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
   abandons the whole module body, the *next* function reports as a second error
   that looks unrelated ("extraneous input 'private' expecting 'class',
   'module', ..."). Two errors, one cause. Module helpers are simply public.
+- **`(:background)` is a declaration, not a note.** A single `(:background)`
+  anywhere in the project makes it a background application, and the build then
+  fails with "The 'Background' permission is required in the manifest file"
+  until `<iq:uses-permission id="Background"/>` is added. Never annotate for a
+  build scope that does not exist yet - add the annotation, the service and the
+  permission in the same change.
 - `Any` sits **above** `Object`. Dictionary and Array lookups yield `Any`, which
   therefore cannot be passed to a parameter declared `Object`. `Any` also has no
   writable name (`as Any` gives "Cannot resolve type"), while strict mode demands

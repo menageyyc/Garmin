@@ -726,3 +726,25 @@ quietly wrong number rather than an error, which is the worst kind.
   Mode, Enhanced Readability, Flashlight Available, Glance Launch Mode, Night
   Mode - is greyed out when no app is loaded. It is not a separate fault; a
   failed build means there is nothing for those options to apply to.
+
+### 2026-09-22 - Second build: the background annotation was a declaration
+- One error, and no source line: *"The 'Background' permission is required in
+  the manifest file in order to create a background application."* v1a has no
+  background code at all - no `ServiceDelegate`, no `getServiceDelegate()`, no
+  `Background.` call anywhere.
+- Cause: `UvNum` and `UvCorrection` carried `(:glance :background)`. **A single
+  `(:background)` anywhere in the project makes it a background application**,
+  and the compiler then refuses to build until the manifest declares the
+  Background permission.
+- This was a self-inflicted wound from trying to be forward-looking. The v1a
+  reasoning was "annotate for the background scope now, it costs nothing, and
+  it avoids a scope surprise in v1b." It is not free. **An annotation is a
+  declaration that a build scope exists, not a note that one might.**
+- Fixed by dropping `:background` from both, leaving `(:glance)`. v1b adds the
+  annotation, the `ServiceDelegate` and `<iq:uses-permission id="Background"/>`
+  in one change, which is the only order that builds at every step.
+- The alternative - declaring the permission now - was rejected. It asks the
+  wearer to grant a permission for something that does not exist, and a
+  permission with no service behind it is the sort of thing store review asks
+  about.
+- Rule added to `CLAUDE.md`.

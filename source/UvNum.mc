@@ -16,10 +16,14 @@ import Toybox.Lang;
 // a static checker cannot do. Every one returns a fully typed value, so
 // nothing downstream loses checking.
 //
-// Annotated for both the glance and the background scope. The glance reads
-// storage and settings; the background service parses JSON. Neither can see a
-// symbol that is not in its own build scope.
-(:glance :background)
+// (:glance) only, for now. This module belongs in the background scope too -
+// the service will parse JSON with it - but v1b adds that annotation at the
+// same time as the service and the manifest permission. Annotating early is
+// not free: ANY (:background) in the project makes it a background
+// application, and the compiler then rejects the build until the manifest
+// declares the Background permission. An annotation is a declaration that a
+// scope exists, not a note about a scope that might.
+(:glance)
 module UvNum {
 
     // Open-Meteo returns an integer where a value happens to be whole and a

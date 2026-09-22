@@ -8,9 +8,11 @@ import Toybox.Lang;
 //
 //   UVI_eff = UVI_api * (1 + k_alt * (h_watch - h_grid) / 1000) * (1 + f * a)
 //
-// Pure arithmetic, no I/O, no state. Annotated for the glance and the
-// background scope so every surface can show the same number.
-(:glance :background)
+// Pure arithmetic, no I/O, no state. (:glance) only for now - v1b adds
+// (:background) here together with the service and the manifest permission,
+// because any (:background) in the project makes it a background application
+// and the build then fails until the permission is declared.
+(:glance)
 module UvCorrection {
 
     // 10% per 1000 m, logged in the build plan as an assumption to refine
