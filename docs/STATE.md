@@ -10,46 +10,57 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## RESUMING? READ THIS FIRST
 
-**Where things stand:** v0 compiles clean and runs in the simulator. The whole
-toolchain is proven. No runtime behaviour has been confirmed yet. A round of
-diagnostic hardening has been pushed but **not yet compiled** - see the
-2026-09-22 log entry.
+**Where things stand: v0 WORKS END TO END.** `HTTP 200 OK` in the simulator on
+2026-09-22. Position, altitude, the Open-Meteo fetch, JSON parse, grid
+elevation and the on-screen diagnostics all work. The toolchain is fully
+proven. Latest commit `0ea4ac2`, and it compiles clean.
 
-**The immediate next action** is to verify the runtime path in the simulator:
+**Question 12 is ANSWERED.** The CAMS air-quality endpoint returns UV to a
+Connect IQ client as designed, and the response carries a correct top-level
+`elevation` (336 m for Olathe, Kansas, which sits at 320-340 m). The GFS
+fallback is not needed. `BASE_URL` stays as it is. Do not revisit this.
 
-1. Allow the Windows Firewall prompt for `simulator.exe` (blocking it makes
-   every web request fail in a way that looks like an API fault)
-2. Set a simulated GPS position via **Settings → Set Position**. Not the
-   Simulation menu - this doc said that and was wrong. Without a position the
-   app correctly shows "No position" and never calls the API
-3. **Set the simulator to launch the app, not the glance:**
-   **Settings → Glance Launch Mode → Launch in Normal Mode**, in the simulator's
-   own menu bar. It defaults to the glance, which renders correctly and then
-   does nothing - because the glance never fetches. A memory readout near
-   `6.8/59.9kB` and small left-aligned text means you are on the glance
-4. **Watch the console, not just the screen.** The app now prints the fix and
-   its quality, the altitude, the outgoing request, and on success a line like
-   `UV OK uv=4.35 gridElev=1048 m idx=20/24 slot+1873s`. `gridElev=ABSENT`
-   means no `elevation` field came back; `slot+Ns` outside 0-3599 means the UTC
-   hour alignment is wrong
-5. **Press START to refetch.** No need to restart the app between attempts
+**The immediate next action** is a daylight test, which is the ONLY thing v0
+has not confirmed:
 
-**Altitude works in the simulator** - it reads about `-18 m`, the simulator's
-default, with no FIT data playing. An earlier note here predicted
-`No altitude`; that was wrong. The `vs grid` suffix stays absent until a fetch
-succeeds and supplies the API's grid elevation.
+1. `update.bat`, then **stop any running debug session** (the red square in VS
+   Code) before pressing F5. F5 with a session already live does not rebuild,
+   and the simulator silently keeps serving the stale `.prg`. This cost real
+   time on 2026-09-22
+2. In the simulator: **Settings → Glance Launch Mode → Launch in Normal Mode**.
+   It defaults to the glance, which renders correctly and then does nothing,
+   because the glance never fetches. Small left-aligned text and a memory
+   readout near `6.8/59.9kB` means you are on the glance
+3. **Settings → Set Position** to somewhere in daylight. The simulator's
+   default is Olathe, Kansas (38.86, -94.80), which is fine but was at night.
+   Pick a longitude near solar noon for the current UTC time
+4. Press **START** to refetch
+5. **Read the Debug Console tab** - not Terminal, which is the build task.
+   `System.println` output lands there
 
-**What that settles:** whether `air-quality-api.open-meteo.com` actually returns
-UV the way the client expects. The *documented* contract is now verified and
-matches the client (see the 2026-09-22 entry); the *live call* is what remains.
-It has never been testable from Claude's sandbox - egress there is an allowlist
-that blocks every external host - so it is the single largest unverified
-assumption in the project. If it fails, the fallback is the main forecast API,
-whose `uv_index` comes from GFS rather than CAMS, and `BASE_URL` in
-`source/UvClient.mc` is the only line that changes.
+**What the daylight test settles:** UV read `0.0` at 23:30 local, which is
+correct, but every night hour returns 0.0 - so a wrong hour index would look
+identical. The UTC alignment in `currentHourIndex` is NOT yet confirmed, and
+neither is the non-zero value path or any colour band above green. The console
+line to check is:
 
-**After that works:** v1 per the build plan - altitude and albedo correction,
-colour bands, glance, background refresh with caching, settings.
+```
+UV OK uv=8.20 gridElev=15 m idx=4/24 slot+3300s
+```
+
+`slot+Ns` must land between 0 and 3599. Outside that, `currentHourIndex` is
+picking the wrong hour, and that would silently corrupt v1's burn-time estimate.
+
+**After that:** v1 per the build plan - altitude and albedo correction, colour
+bands, glance, background refresh with caching, settings.
+
+**Simulator facts learned the hard way** (all cost time on 2026-09-22):
+- Default position is Olathe, Kansas, returned by `Position.getInfo()` as a
+  cached fix. No `Set Position` needed to get a fetch going
+- Altitude works without FIT playback and reads about `-18 m`
+- The simulator launches the **glance** by default, not the app
+- The build Terminal keeps historical scrollback. Builds 1-5 in it are the old
+  `19 -> 3 -> 2 -> 2 -> 0` sequence from a previous session, not current errors
 
 **Do not re-litigate** anything in `CLAUDE.md`'s hard constraints or the
 "Rejected approaches" table below. Each was researched against primary sources
@@ -57,21 +68,21 @@ and cost real time to establish.
 
 **Working with Matt:** he is technically fluent but does not write code. Explain
 reasoning in plain language. He builds and tests on his own Windows machine -
-Claude's sandbox cannot reach Garmin or Open-Meteo. He pulls changes by
-double-clicking `update.bat`, so push to the branch and tell him to run it.
+Claude's sandbox reaches nothing external except `WebSearch`. He pulls changes
+by double-clicking `update.bat`, so push and tell him to run it. **The repo's
+default branch is `claude/garmin-uv-tracking-app-7y6gk6` and that is what his
+clone tracks** - push there, or he will not receive the work.
 
 ---
 
 ## Current phase
 
-**v0 BUILDS AND RUNS.** Compiles clean and launches in the simulator on
-epix Pro (Gen 2) 47mm / quatix 7 Pro (5.2.0). Now verifying runtime behaviour:
-position, altitude and the Open-Meteo fetch.
+**v0 IS DONE, pending one confirmation.** Compiles clean, runs on epix Pro
+(Gen 2) 47mm / quatix 7 Pro (5.2.0), and fetches live UV from Open-Meteo over
+`HTTP 200`. Every external dependency v0 exists to prove is proven.
 
-Next action: confirm the runtime path in the simulator - set a simulated GPS
-position, allow the firewall prompt, and see whether the Open-Meteo call
-returns a UV value. That settles open question 12, which has never been
-testable from Claude's sandbox.
+Next action: a daylight test to confirm the UTC hour alignment in
+`currentHourIndex`, then start v1.
 
 ---
 
