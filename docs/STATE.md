@@ -131,6 +131,8 @@ Next action: **build it and report the errors.** Then v1b.
 | 14 | Does the phone-side App Settings editor show both list settings, and does the on-watch MENU route write the same value? | v1a settings | Open - test in simulator |
 | 15 | Does `Menu2` + `Menu2InputDelegate` behave as written on API 5.2? | v1a settings | Open - the first build will say |
 | 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
+| 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
+| 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
 
 ---
 
@@ -175,6 +177,15 @@ Next action: **build it and report the errors.** Then v1b.
 | 2026-09-22 | Skin type deferred from v1 to v2 | Nothing in v1 consumes MED; burn time and dose are v2 and v3. Shipping a setting that changes nothing visible teaches people to ignore the settings screen |
 | 2026-09-22 | Storage schema versioned; the first v1 run wipes the v0 store | v0 kept a single number under a different set of keys. There is nothing there worth migrating - it is refetched within seconds - and reading an old key with new expectations is how silent wrongness starts |
 | 2026-09-22 | Correction factors are clamped, the resulting UV index is not | Altitude delta is clamped to -1500..+4500 m and reflected fraction to 0.60, because both are products of imprecise inputs. The output is left alone: 12 on a glacier really can correct to 24, and clamping that away would hide the case the app exists for |
+| 2026-09-22 | Dose accumulates only on **positive evidence of being outdoors**, never on activity type alone | Matt's catch. The watch records a *sport*, not an outdoor activity. Running, cycling, skiing, rowing, swimming and surfing all have indoor forms, and offseason training is full of them. A treadmill run would have booked a full MED |
+| 2026-09-22 | Outdoor test is `Activity.Info.currentLocationAccuracy` during a recorded activity | The receiver is already powered by the activity, so reading its quality is free. This does **not** contradict the "GPS as indoor proxy" rejection - that was about polling GPS continuously as a standalone detector with no activity running |
+| 2026-09-22 | Fix quality, not movement | Requiring the position to change would separate a treadmill from a road run, but would also zero out chairlift and belay time - high-altitude, high-albedo exposure, exactly the case the app exists for |
+| 2026-09-22 | Indoor sub-sport list suppresses prompts; it never decides to accumulate | An indoor allow-list can never be complete, and anything missing from it would silently over-count. Requiring a positive signal makes an unlisted indoor sport fail closed |
+| 2026-09-22 | Three exposure states in the UI, not two | "Counting", "not counting because I cannot confirm you are outdoors", and "indoors" must look different. The build plan already required paused to look different from recovering; this is a third |
+| 2026-09-22 | Per-profile "this one is outdoors" setting, default off | Covers the outdoor activity recorded with GPS off, which is otherwise permanently ambiguous. Set once for Trail Run and never thought about again |
+| 2026-09-22 | GPS quality is gated on for exposure detection but deliberately NOT for the forecast fetch | Same field, two jobs. A last-known fix is fine for picking a 40 km grid cell; it is useless for telling a treadmill from a road. A future session must not "fix" this inconsistency |
+| 2026-09-22 | Fable 5.1 does a review pass when v1a is green, and again at the v2 dose integrator | It is Anthropic's most capable widely released model, for demanding reasoning and long-horizon agentic work. The dose integrator is the health-adjacent maths where being wrong matters to skin |
+| 2026-09-22 | The Fable brief is written differently from this repo's house style, on purpose | Anthropic's own migration guidance: prompts written for prior models are often too prescriptive on Fable and reduce output quality. CLAUDE.md and this file are deliberately prescriptive, which has served Opus well and would work against Fable |
 
 ---
 
@@ -183,7 +194,7 @@ Next action: **build it and report the errors.** Then v1b.
 | Approach | Why rejected |
 |---|---|
 | Ambient light sensor for sun detection | Not exposed to Connect IQ; open request since ~2020, never shipped |
-| GPS signal quality as an indoor/outdoor proxy | Battery cost too high for continuous use |
+| GPS polled continuously as a standalone indoor/outdoor proxy | Battery cost too high for continuous use. **Note the narrowness of this rejection** - reading `currentLocationAccuracy` *during an activity that already has the receiver on* is free, and as of 2026-09-22 it is the outdoor test. Do not read this row as rejecting that |
 | OpenUV API | Requires a key; 50 req/day free tier; key extractable from a published app |
 | Dose gauge that recovers in shade | Biologically wrong. Same-day dose does not decay |
 | "No phone needed" as a capability claim | False. No Garmin watch has a UV sensor. Caching is what enables offline display |
@@ -624,3 +635,71 @@ quietly wrong number rather than an error, which is the worst kind.
   unverified against the compiler. The riskiest surfaces are `Menu2` /
   `Menu2InputDelegate`, `Application.Properties`, and the settings resource
   XML, none of which v0 exercised.
+
+### 2026-09-22 - The activity gate was unsafe. Matt caught it
+- Matt asked what happens when the watch detects running, cycling or skiing
+  **indoors** - offseason training, a treadmill, a spin bike, a wave pool. The
+  build plan said dose accumulates when "an outdoor activity is recording".
+  **The watch does not record an outdoor activity. It records a sport**, and
+  almost every sport this app cares about has an indoor form. A treadmill run
+  at midday would have booked a full MED against skin that saw no sun at all.
+- That is the exact failure mode the whole design exists to prevent: an app
+  that over-reports teaches people to ignore it. It was written into the
+  design authority and nobody had noticed.
+- **The fix is not a prompt, it is an inversion.** Never accumulate by
+  default; accumulate only on positive evidence of being outdoors. An indoor
+  allow-list can never be complete - Matt's own examples included indoor
+  surfing - and anything missing from such a list silently over-counts.
+  Requiring a positive signal means an unlisted indoor sport fails closed.
+- **The positive signal is free.** `Activity.Info.currentLocationAccuracy`
+  reports live GPS quality during a recorded activity, and the activity has
+  already powered the receiver. `Activity.getProfileInfo()` gives `sport` and
+  `subSport` alongside it.
+- **This does not contradict the earlier GPS rejection.** That rejection was
+  about polling GPS continuously as a standalone detector with no activity
+  running, where the battery cost is real. Reading the quality of a receiver
+  someone else turned on is a different question with a different answer. The
+  rejected-approaches row has been narrowed so a future session cannot read it
+  the wrong way.
+- **Quality, not movement.** Requiring the position to change would separate a
+  treadmill from a road run, but would also zero out chairlift and belay time -
+  high-altitude, high-albedo, and precisely the exposure this app exists to
+  measure. The residual over-count is a treadmill beside a south-facing window
+  holding a lock, which is rare and which window glass largely defuses anyway,
+  since it blocks most of the UVB that drives erythema.
+- **Three UI states now, not two:** counting, not-counting-because-unconfirmed,
+  and indoors. The build plan already required "paused" to look different from
+  "recovering"; this is a third thing that must not look like the other two.
+- **Added a per-profile override**, default off, for the outdoor activity
+  recorded with GPS switched off - otherwise permanently ambiguous. Set once
+  for Trail Run and never thought about again.
+- Build plan updated: the signals table, and the "honest design" paragraph that
+  carried the wrong rule.
+
+### 2026-09-22 - Model choice for the remaining phases
+- Looked up the current model line rather than reasoning from memory, after
+  Matt pushed back on a vaguer answer. **Claude Fable 5.1 (`claude-fable-5-1`)
+  is Anthropic's most capable widely released model**, above Opus 5, for
+  demanding reasoning and long-horizon agentic work, at roughly double the
+  per-token price. Opus 5 at `xhigh` - what this project has been using - is
+  the documented best setting for coding and agentic work, with `max` the only
+  step above it.
+- **Decision: Fable does a review pass when v1a is green, and again at the v2
+  dose integrator.** Not during the v1a compile loop, where the bottleneck is
+  Matt's build cycle rather than idea quality.
+- **The Fable brief must be written differently from this repo's house style.**
+  Anthropic's own migration guidance is explicit that prompts written for prior
+  models are often too prescriptive on Fable and reduce output quality.
+  `CLAUDE.md` and this file are deliberately prescriptive - hard constraints, a
+  rejected-approaches table, "do not relitigate" - and that has served Opus
+  well. For Fable the brief should instead:
+  - give the whole task specification up front rather than drip-feeding it
+  - state each constraint **with the evidence behind it**, so it can reason
+    about the constraint rather than comply with a rule
+  - drop the "do not relitigate" framing entirely, and explicitly invite
+    challenge where the reasoning is thin - which is the point of a review pass
+  - keep the physical and platform facts (no UV sensor, no ambient light
+    sensor, same-day dose does not decay) as findings with sources attached
+- Today is the argument for that pass: the activity gate above was a design
+  hole sitting in the design authority across several sessions, and it took a
+  reader who had not written it to see it.
