@@ -33,19 +33,19 @@ Two runs settled it:
 - Colour bands work at both ends of the range tested
 - The measured-font layout holds; no collision between the number and the band
 
-**The one loose end**, and it is minor: `slot+Ns` from the Debug Console has
-never been read. A *gross* misalignment in `currentHourIndex` is ruled out
-behaviourally - index 5 at 05:11 UTC is 12:00 Bangkok local, and a near-peak
-9.5 is what solar noon should give. But the UV curve is flat within an hour or
-two of noon, so a **+/-1-2 hour offset would look identical**. Read the line
-once, any time, from any successful fetch:
+**No loose ends. The UTC alignment is CONFIRMED**, and by better evidence than
+a single sample - consecutive runs caught `currentHourIndex` crossing an hour
+boundary:
 
 ```
-UV OK uv=9.50 gridElev=4 m idx=5/24 slot+660s
+idx=4/24 slot+3177s
+idx=4/24 slot+3577s     <- 23 s before the hour rolls
+idx=5/24 slot+50s       <- index advanced, slot reset. correct.
+idx=5/24 slot+707s      <- Bangkok, 05:11:47 UTC, index 5 = 05:00 UTC
 ```
 
-`slot+Ns` must be 0-3599. Do this before v1 leans on the hour index for a
-burn-time estimate.
+Every value inside 0-3599, and the index advanced exactly when it should.
+`currentHourIndex` is right. Do not re-test this.
 
 **Simulator facts, all learned the hard way on 2026-09-22:**
 - **Settings → Glance Launch Mode → Launch in Normal Mode.** It defaults to the
@@ -56,7 +56,12 @@ burn-time estimate.
   else draws "Please enter position in latitude, longitude format in degrees"
 - Default position is Olathe, Kansas (`38.856147, -94.800953`), returned by
   `Position.getInfo()` as a cached fix. A fetch works with no position set
-- Altitude works without FIT playback and reads about `-18 m`
+- **Altitude is a FIXED simulator constant of `-18 m`.** It is not derived from
+  the simulated position - it read `-18 m` identically at Olathe and at
+  Bangkok. It is not Calgary, not Bangkok, not anywhere. So the `vs grid`
+  figures on screen are correct arithmetic over a fake input: they demonstrate
+  the mechanism, not real physics. On the watch the barometer supplies the real
+  value. Use FIT playback if a realistic altitude is ever needed in the sim
 - **Stop any running debug session before F5.** F5 with a session already live
   does not rebuild and the simulator silently serves the stale `.prg`
 - The build Terminal keeps historical scrollback. Old `19 -> 3 -> 2 -> 2 -> 0`
@@ -85,9 +90,7 @@ pushing elsewhere means he never receives the work.
 (5.2.0), and fetches live UV from Open-Meteo over `HTTP 200` at both a night
 and a daylight position, with correct risk bands, colours and grid elevations.
 
-Next action: **start v1.** One minor loose end carried forward - read `slot+Ns`
-from the Debug Console to rule out a small UTC hour offset before v1 uses the
-hour index for burn-time estimates.
+Next action: **start v1.** Nothing outstanding from v0.
 
 ---
 
@@ -489,3 +492,28 @@ hour index for burn-time estimates.
   before v1 uses the hour index for burn-time estimates. Expected ~660s.
 - Nothing in v0 is outstanding beyond that one console line. **Next session
   starts v1.**
+
+### 2026-09-22 - Console read. v0 closed with no loose ends
+- **UTC alignment CONFIRMED by an hour-boundary crossing.** Consecutive runs
+  logged `idx=4 slot+3177s`, `idx=4 slot+3577s`, then `idx=5 slot+50s`. The
+  index advanced exactly at the roll and the slot reset - 73 s of wall clock
+  between the last two runs, with the boundary in between. Every value inside
+  0-3599. Stronger than any single reading could be. `currentHourIndex` is
+  correct; this does not need re-testing.
+- **The 45 s GPS timeout earned its place on the first run.** Console shows
+  `No usable cached fix; acquiring one-shot GPS` then `UV fetch failed: GPS
+  timed out (code none)`. Without it that run would have sat on "..." forever
+  with no error, which is precisely the failure mode it was added to kill.
+- **`quality=LAST_KNOWN` on every single fetch.** This vindicates the
+  2026-09-22 decision to log GPS quality rather than gate on it. Had the client
+  refused anything below USABLE, every fetch in the simulator would have
+  failed, and the endpoint would still be unverified.
+- **The `-18 m` altitude is a fixed simulator constant, not position-derived.**
+  It read identically at Olathe and Bangkok. It is not Calgary's ~1045 m, not
+  Bangkok's ~2 m, not anywhere's. The `vs grid` figures are therefore correct
+  arithmetic over a fake input - they prove the mechanism works, not the
+  physics. The real barometer supplies the real value on the watch.
+- **v1 note on where the altitude correction actually earns its keep:** in a
+  city the watch altitude and the CAMS cell mean are close, so the delta is
+  near zero. It matters on ski hills and mountain trails, where you sit well
+  above a ~40 km cell average - exactly the cases this app exists for.
