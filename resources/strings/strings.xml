@@ -2,7 +2,7 @@
     <string id="AppName">UV Tracker</string>
 
     <string id="SurfaceTitle">Surface</string>
-    <string id="SurfacePrompt">What you are standing on. Fresh snow adds the most, even though the forecast already allows for snow in the area. Resets to grass at midnight. The reading is for open sky: shade is not modelled.</string>
+    <string id="SurfacePrompt">What you are standing on. Snow adds the most, even though the forecast already allows for snow in the area. Sand, concrete and water add only a few percent at most: the UV index depends on how bright the whole area is for kilometres around, not the patch underfoot. Resets to grass at midnight. The reading is for open sky: shade is not modelled.</string>
     <string id="SurfaceGrass">Grass or ground</string>
     <string id="SurfaceConcrete">Concrete or urban</string>
     <string id="SurfaceWater">Water</string>

@@ -520,8 +520,10 @@ on screen:
 
 - **Surroundings is gone.** The settings page and MENU go straight to the
   surface list. The settings page ends `open sky; shade not modelled`
-- **Fresh snow now reads `about +17% fresh snow`**, not `+42%`. Old snow is
-  `about +7%`. The other surfaces are unchanged
+- **Fresh snow now reads `about +18% fresh snow`**, not `+42%`. Old snow is
+  `about +8%`. (v1c's first build printed +17% / +7%: percentages were
+  truncated then, and are rounded since question 25.) The other surfaces
+  shrank too - see "The surface figures" at the end of this file
 - **The surface word always shows.** `grass, no correction` in a city,
   `grass` under an altitude line. Any surface other than grass resets to grass
   at local midnight
@@ -612,3 +614,27 @@ The numbers there are placeholders, not predictions. How to read the real ones:
 
 The diagnostics page's third line (`-18 m / grid 1850 m`) now shows the cell
 height, not the point height.
+
+## The surface figures (question 25)
+
+Sand, concrete and water were cut, and grass went to zero, by the same
+reasoning that cut snow: the UV index rises with how bright the whole area is
+for kilometres around, not the patch underfoot.
+
+| Surface | Menu sub-label | Reading page |
+|---|---|---|
+| Grass or ground | `no change` | `grass, no correction` (or just `grass` under an altitude line) |
+| Water | `about +1%` | `water, no correction` - +1% is applied but under the 2% display threshold |
+| Concrete or urban | `about +2%` | `about +2% concrete` |
+| Dry sand | `about +3%` | `about +3% sand` |
+| Old snow | `about +8%` | `about +8% old snow` |
+| Fresh snow | `about +18%` | `about +18% fresh snow` |
+
+The settings page reads `no change to UV` for grass instead of `about +0%
+UV`. In the console, `surface=` shows the same whole numbers - `surface=0%`
+on grass, where earlier builds printed `surface=1%`.
+
+**If concrete shows no percentage on the reading page,** the rounding fix has
+not taken: that is the old truncation (+2% computed as 1.9999, shown as 1,
+then hidden). Report it.
+

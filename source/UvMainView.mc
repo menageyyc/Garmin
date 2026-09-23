@@ -29,10 +29,11 @@ class UvMainView extends WatchUi.View {
     private const PAGE_COUNT = 3;
 
     // Below this, a correction term is not worth a line. k_alt is a plus or
-    // minus 30% assumption and the albedo figures are mid-range estimates, so
-    // anything under 2% is well inside the model's own error bars. Printing
-    // "+1%" claims a precision this does not have, and on the default settings
-    // - grass, open - it would be the permanent state of the screen.
+    // minus 30% assumption and the surface figures are upper-limit estimates,
+    // so anything under 2% is well inside the model's own error bars. Printing
+    // "+1%" claims a precision this does not have. Since question 25 (2026-09-23)
+    // water's +1% and grass's 0% never show a percentage; sand and concrete
+    // just clear it. Percentages are rounded, not truncated - see UvCorrection.
     private const MIN_SHOWN_PERCENT = 2;
 
     private var _client as UvClient or Null = null;
@@ -343,7 +344,7 @@ class UvMainView extends WatchUi.View {
         var pct = UvCorrection.surfacePercent(UvSettings.surfaceIncrement(surface));
 
         var lines = ["Surface", UvSettings.surfaceName(surface),
-                     "about " + signed(pct) + "% UV",
+                     pct == 0 ? "no change to UV" : "about " + signed(pct) + "% UV",
                      surface == UvSettings.SURFACE_DEFAULT ? "default" : "until midnight",
                      "open sky; shade not modelled"];
         var tints = [Graphics.COLOR_DK_GRAY, Graphics.COLOR_WHITE,

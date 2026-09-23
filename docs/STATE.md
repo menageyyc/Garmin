@@ -19,9 +19,9 @@ all, so the altitude correction had no baseline. Cause, from Open-Meteo's own
 source: it stores **no terrain heights for CAMS**. The app now computes the
 cell height itself - the mean of 49 terrain heights across the CAMS cell, from
 Open-Meteo's Elevation API, once per cell (`UvCell.mc`). **Next: Matt compiles
-and runs "Testing the cell height" in TOOLCHAIN.md.** Then derive and source
-the shrunken non-snow surface figures (question 25, **decided B**), then v1b.
-See the last session log entry.
+and runs "Testing the cell height" in TOOLCHAIN.md.** Question 25's figures
+are **derived, approved and written** (grass 0, water +1%, concrete +2%, sand
++3%; also not yet compiled). Then v1b. See the last session log entry.
 
 The v1c-before-v1b order was not optional: the review showed v1a's position,
 altitude and freshness logic is what v1b would be built on, and it was wrong.
@@ -156,13 +156,13 @@ change what v1b is built on.
 Next action, in order:
 1. **Compile and test the cell height** (TOOLCHAIN.md, "Testing the cell
    height"). Decided and written 2026-09-23; see the last session log entry
-2. **Question 25 is decided: B, shrink the non-snow surfaces.** Next session
-   derives new figures for sand, concrete and water (and checks grass) from
-   sources, by the same physics used for snow, proposes them to Matt with the
-   evidence, and only then changes `UvSettings.surfaceIncrement()`. All six
-   surfaces stay in the list
-3. Then v1b. Note for its design: the cell-height request is a second network
-   call the background service must either make or leave to the foreground
+2. ~~Question 25 figures~~ **Done 2026-09-23:** grass 0, water +1%, concrete
+   +2%, sand +3%, approved by Matt and written, with a rounding fix for the
+   on-screen percentages. Compiles with step 1
+3. Then v1b. Notes for its design: the cell-height request is a second network
+   call the background service must either make or leave to the foreground,
+   and it cannot write storage; the build plan's "every 30 min" refresh is
+   wrong because CAMS updates twice a day
 
 ---
 
@@ -193,7 +193,7 @@ Next action, in order:
 | 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
 | 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | **Answered 2026-09-23: one decimal.** Already what v1c does |
 | 23 | Situational surface: expire back to grass at local midnight, or after ~12 h? | v1c | **Answered 2026-09-23: local midnight** |
-| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | **Answered 2026-09-23: B - shrink them.** Keep all six surfaces; derive smaller, sourced figures for sand, concrete and water (and re-check grass) by the snow logic. Figures not yet derived - next session |
+| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | **Answered 2026-09-23: B - shrink them.** Keep all six surfaces; derive smaller, sourced figures for sand, concrete and water (and re-check grass) by the snow logic. **Figures derived and approved 2026-09-23: grass 0, water +1%, concrete +2%, sand +3%** (TEMIS regional-albedo formula over published UV albedos; see that day's last log entry) |
 | 24 | Which model does the v2 dose-integrator review pass? | v2 review | Open. Matt moved the project to Opus 5.5 on 2026-09-23 and is inclined to use Opus 5.5 at medium effort rather than Fable 5.1, on published benchmarks. Not yet decided |
 
 ---
@@ -254,6 +254,8 @@ Next action, in order:
 | 2026-09-23 | Position and altitude sampled on every onShow; cached fix over 60 min refused | The distance check could never fire, and a real watch's cached fix is wherever GPS last ran |
 | 2026-09-23 | ~~Request `elevation=nan`; on HTTP 400 or unparseable body, retry once without it~~ **SUPERSEDED same day, see next row** | The default `elevation` is the point terrain height, which zeroes the altitude correction on a hill. A refused parameter must not cost a reading |
 | 2026-09-23 | Non-snow surfaces shrink by the same logic as snow (question 25, option B); all six surfaces stay | The index rises with the brightness of the whole region, not the patch underfoot, so v1a's albedo x 0.5 overstates sand, concrete and water as it did snow. Keeping the list gives wearers a choice that matches what they see. Matt: had the list been collapsed instead, water should still have been kept, so ground, water and snow are all represented |
+| 2026-09-23 | Non-snow surfaces: grass 0, water +1%, concrete +2%, dry sand +3% | TEMIS's f(A) = (1 - 0.25 A_ref)/(1 - 0.25 A) over published erythemal albedos, A_ref = 0.05. The same formula reproduces the measured snow (15-25%) and Salar de Uyuni (+20%) effects. Upper limits: they assume the surface for kilometres around |
+| 2026-09-23 | On-screen percentages rounded, not truncated | 0.02 x 100 is 1.9999999 in a 32-bit float; truncated it read +1% and fell under the 2% threshold, so +2% was never shown. Fresh / old snow now read +18% / +8% |
 | 2026-09-23 | Grid-cell height = mean of 49 Elevation API heights across the cell the UV response names; once per cell, cached | `elevation=nan` returns nothing: Open-Meteo stores no terrain for CAMS. ECMWF builds model terrain as the mean height over each grid box, so this reproduces the same quantity. The response's `latitude`/`longitude` are documented as the cell centre |
 | 2026-09-23 | UV interpolated between hours | Hourly values are instantaneous; the step read was up to 30-50% off on the shoulders |
 | 2026-09-23 | Fresh window 6 h, not 2 h | CAMS runs twice a day; a 2 h refetch returns the same numbers |
@@ -1267,3 +1269,68 @@ The options:
   and the resolution note now describe the cell mean and where it comes from.
 
 Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
+
+### 2026-09-23 - Question 25 figures derived, approved, written. NOT COMPILED
+- Matt asked for the surface figures first, with sources, and his OK before
+  any code changed. Given; then written.
+
+**Method.** KNMI's operational UV service (TEMIS) corrects the UV index for
+regional surface albedo with
+
+    f(A) = (1 - 0.25 * A_ref) / (1 - 0.25 * A)
+
+which is the ground-atmosphere multiple-reflection effect - the physics that
+cut snow. A_ref, what the model already assumed for snow-free ground, is taken
+as 0.05, the value the 2026 ERA5 UV-index paper uses.
+
+**Checked against measurements before use.** Regional albedo 0.5-0.7 gives
++13% to +20% over 0.05, against the measured clear-sky snow effect of 15-25%.
+At the Salar de Uyuni (measured erythemal albedo 0.69 +/- 0.02), it predicts
+about +17-19% against a measured +20% at 50 deg solar elevation (Reuder et al.
+2007). So the formula holds from grass to salt flat.
+
+| Surface | Published erythemal albedo | Formula | Was | Now |
+|---|---|---|---|---|
+| Grass | 0.01-0.04 (Feister & Grewe 1995); 0.02-0.03 (Chadysiene & Girgzdys 2008) | -0.9 to -0.3% | +1.5% | **0** |
+| Water | 0.05-0.08 (Feister & Grewe); ~0.10 calm water (WHO UVI guide) | 0 to +1.3% | +3.5% | **+1%** |
+| Concrete or urban | 0.10-0.20 (Feister & Grewe); ~0.10 (Turner & Parisi 2018 review) | +1.3 to +4.0% | +5% | **+2%** |
+| Dry sand | ~0.10 (Chadysiene & Girgzdys); ~0.15 (WHO); higher for white sand | +1.3 to +5.3% | +9% | **+3%** |
+
+- Grass is 0, not negative: CAMS's own snow-free UV albedo is not pinned
+  down well enough to claim a reduction
+- **Upper limits.** The ground that matters reaches 10-20 km, detectably
+  40-50 km (Degunther & Meerkotter 1998, 2000). The figures assume that whole
+  area is the surface; a strip of beach adds less
+- **Sand and concrete are the same within the measurement spread.** Sand's
+  +3% over concrete's +2% rests on sand's range reaching higher, not on a
+  measured difference
+- **Unconfirmed:** CAMS's actual snow-free UV albedo. ECMWF's UV-visible
+  background albedo is a MODIS snow-free climatology, probably higher than
+  true UV albedo; if so, these figures err high, the safe direction
+- **Unverified counter-evidence:** a search summary of Schmucki et al. 2001
+  (Swiss Alps) appears to give +5% at effective albedo 0.1, where the formula
+  gives +1-3%. Its baseline could not be read from here
+- Consequence, stated plainly: water and grass now never show a percentage
+  (under the 2% threshold). Sand and concrete just clear it. All six stay in
+  the list, per Matt's decision
+
+**Rounding fix.** Percentages were truncated. 0.02 x 100 is 1.9999999 in a
+32-bit float, so concrete's +2% would have read "+1%" and been hidden.
+`UvCorrection.roundPercent()` now rounds, halves away from zero, and
+`surfacePercent()` works from the increment directly rather than from
+(factor - 1), which adds float error. Fresh snow now reads +18% and old snow
++8% (were +17% / +7%). The altitude floor still reads -15%.
+
+**Files:** `UvSettings.mc` (figures, sourced comment, "no change" sub-label
+for grass), `UvCorrection.mc` (rounding, `clampIncrement`), `UvMainView.mc`
+("no change to UV" on the settings page), `strings.xml` (surface prompt),
+`properties.xml` (comment), TOOLCHAIN.md ("The surface figures").
+
+- **Riskiest for the compiler:** nothing new to the project. The ternary in
+  the settings-page array sits beside one that already compiles, and
+  `(:glance)` modules already call each other
+- Build plan updated: the surface table and question 25
+- Job 1 (the cell-height test) is still waiting on Matt's console lines
+
+Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
+
