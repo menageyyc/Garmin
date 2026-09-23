@@ -535,14 +535,10 @@ on screen:
 
 ### What to watch in the console
 
-```
-GET ... lat=51.1150 lon=-115.7630 days=2 elev=nan
-UV OK raw=1.84 hr=1.70 eff=... gridElev=1720 m (cell) idx=... slot+... alt=... surface=1%
-```
+v1c's first build also printed `elev=nan` and `(cell)`. Both are gone; the
+elevation lines to watch now are in "Testing the cell height" at the end of
+this file.
 
-- `elev=nan` and `(cell)` mean the app asked for the grid cell's own height
-- `Code 400 with elevation=nan; retrying without it` then `(point)` means
-  Open-Meteo refused it. The app still works; report the line
 - `GPS cached ... age=12 s` / `age=unknown` - how old the simulator says its
   fix is. **Worth reporting either way**; nobody knows yet what the simulator
   puts there
@@ -555,3 +551,64 @@ UV OK raw=1.84 hr=1.70 eff=... gridElev=1720 m (cell) idx=... slot+... alt=... s
 
 In `STATE.md`, 2026-09-23 entry. Two positions 4 km apart, copy both `UV OK`
 lines.
+
+Done 2026-09-23: `elevation=nan` came back `gridElev=ABSENT` at both
+positions. That request parameter is gone; see the next section.
+
+## Testing the cell height
+
+The altitude correction needs the height of the ~45 km grid cell the UV
+forecast was computed for. Open-Meteo does not store that for CAMS, so the app
+now works it out: it reads which cell the UV answer came from, asks Open-Meteo's
+Elevation API for 49 terrain heights spread across that cell, and averages
+them. Once per cell, then kept - terrain does not move.
+
+**What to do.** Pull, stop any debug session, F5. Then in the simulator:
+
+1. **Settings -> Set Position** -> `51.115, -115.763` (Sunshine base). START.
+2. **Set Position** -> `51.078, -115.779` (Sunshine Village). START.
+3. **Set Position** -> `51.045, -114.070` (downtown Calgary). START.
+
+Copy every line from the Debug Console that starts with `UV OK`, `GET` or
+`Cell height`.
+
+**What the console should say** on the first fetch at a new cell:
+
+```
+GET https://air-quality-api.open-meteo.com/v1/air-quality lat=51.1150 lon=-115.7630 days=2
+UV OK raw=... cell=51.20,-115.60 cellElev=pending pointElev=1650 m idx=... alt=0% surface=1%
+GET https://api.open-meteo.com/v1/elevation cell=51.20,-115.60 points=49
+Cell height 1850 m from 49/49 points, cell=51.20,-115.60 alt=-15%
+```
+
+The numbers there are placeholders, not predictions. How to read the real ones:
+
+- **`cell=`** is the grid cell the forecast came from. Both Sunshine positions
+  should give the **same** cell (`51.20,-115.60` on paper). Calgary should
+  give a different one
+- **`Cell height ... 49/49 points`** is the new baseline. On the second
+  Sunshine position there should be **no** `GET .../elevation` and no
+  `Cell height` line: the UV OK line shows `cellElev=` with a number
+  straight away, because the cell was already measured. That is the cache
+  working
+- **`pointElev=`** is what Open-Meteo's own `elevation` field says. It is not
+  used any more, only logged. If the two Sunshine positions show two
+  different `pointElev` values (roughly 1,650 and 2,150), that confirms the
+  review's finding 1 - the default field is the height of the exact spot -
+  and it is the test "part A" that was skipped
+- **`alt=-15%`** at Sunshine in the simulator, and the reading page will
+  print `-15% altitude`. **That is right.** The simulator's altitude is a
+  fixed -18 m, so it looks as if you are standing well over a kilometre below
+  the mountain cell, and the correction's floor (a delta of -1,500 m, i.e.
+  -15%) catches it. Anything other than -15% there means the cell height
+  came back under about 1,480 m. On the watch the barometer supplies the
+  real height
+- **`Cell height failed: ...`** means the second request failed. The UV
+  reading still shows, the diagnostics page says `no grid`, and the
+  altitude correction is off. Report the whole line
+- **`cellElev=ABSENT`** with no `GET .../elevation` after it means the
+  air-quality response carried no cell coordinates. Report it; the app
+  cannot pick a cell without them
+
+The diagnostics page's third line (`-18 m / grid 1850 m`) now shows the cell
+height, not the point height.

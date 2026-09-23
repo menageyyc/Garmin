@@ -22,8 +22,11 @@ import Toybox.Timer;
 //
 // One thing those tests could NOT show: both sites were flat, so they could
 // not tell a point terrain height from a grid-cell mean. The 2026-09-23 review
-// found the default is the point height; the request now asks for the cell's
-// own height with elevation=nan. That part does need testing - see STATE.md.
+// found the default is the point height. v1c asked for the cell's own height
+// with elevation=nan, and the simulator showed the endpoint returns nothing
+// for it: Open-Meteo stores no terrain heights for CAMS. So the response's
+// elevation is now logged but not used, and the cell height comes from a
+// second request, made once per cell - see UvCell and requestCellHeight().
 //
 // timeformat=unixtime keeps the payload small. ISO timestamps roughly double
 // the size of the time array for no benefit on-device. Payload size is the
@@ -33,6 +36,7 @@ import Toybox.Timer;
 class UvClient {
 
     private const BASE_URL = "https://air-quality-api.open-meteo.com/v1/air-quality";
+    private const ELEVATION_URL = "https://api.open-meteo.com/v1/elevation";
 
     // Two days, not one. forecast_days=1 returns the current UTC day, which
     // in Calgary cuts at 18:00 local - fine for "what is it now", useless for
@@ -55,10 +59,10 @@ class UvClient {
     // web request (2026-09-23 review, finding 10).
     private var _cancelled as Boolean = false;
 
-    // Ask Open-Meteo for the grid cell's own height rather than the terrain
-    // height at our coordinates. See requestUv(). Dropped for the rest of this
-    // client's life if the endpoint refuses it.
-    private var _cellElevation as Boolean = true;
+    // The centre of the grid cell the last UV response answered for, held
+    // while its height is being fetched.
+    private var _cellLat as Float or Null = null;
+    private var _cellLon as Float or Null = null;
 
     function initialize(onDone as Method(success as Boolean) as Void) {
         _onDone = onDone;
@@ -207,17 +211,11 @@ class UvClient {
             "timeformat"    => "unixtime"
         };
 
-        // By default Open-Meteo's "elevation" is the height of a 90 m terrain
-        // model at our exact coordinates. On a piste that matches the
-        // barometer, the delta is about zero, and the altitude correction
-        // vanishes exactly where it matters. elevation=nan is documented to
-        // return the grid cell's own height instead - the height CAMS itself
-        // corrected for, and so the right baseline. (2026-09-23 review,
-        // finding 1. Open-Meteo issue #1155 reported nan returning the wrong
-        // height in Dec 2024; the simulator test in STATE.md checks it.)
-        if (_cellElevation) {
-            params.put("elevation", "nan");
-        }
+        // No elevation parameter. elevation=nan was tried in v1c and returns
+        // no elevation at all on this endpoint, because Open-Meteo holds no
+        // terrain heights for CAMS. It is not a documented parameter of the
+        // air-quality API either. The cell height comes from
+        // requestCellHeight() instead.
 
         var options = {
             :method       => Communications.HTTP_REQUEST_METHOD_GET,
@@ -226,28 +224,15 @@ class UvClient {
 
         System.println("GET " + BASE_URL + " lat=" + lat.format("%.4f")
                        + " lon=" + lon.format("%.4f")
-                       + " days=" + FORECAST_DAYS
-                       + " elev=" + (_cellElevation ? "nan" : "default"));
+                       + " days=" + FORECAST_DAYS);
         Communications.makeWebRequest(BASE_URL, params, options, method(:onResponse));
     }
 
     public function onResponse(code as Number, data as Dictionary or String or Null) as Void {
-        var state = UvState.get();
-
-        // If the endpoint refuses elevation=nan, drop it and ask again once.
-        // Two ways that could show: an HTTP 400, or a body the watch's JSON
-        // parser rejects (-400) - JSON has no NaN, so an "elevation": NaN
-        // echoed back would fail to parse. A refused parameter must not cost
-        // the wearer a reading: without it the altitude correction reads about
-        // zero on a hill, which is an under-report, the safe direction.
-        if (_cellElevation && (code == 400
-                               || code == Communications.INVALID_HTTP_BODY_IN_NETWORK_RESPONSE)) {
-            _cellElevation = false;
-            System.println("Code " + code.toString() + " with elevation=nan; retrying without it");
-            requestUv();
+        if (_cancelled) {
             return;
         }
-
+        var state = UvState.get();
         state.httpCode = code;
 
         if (code != 200) {
@@ -281,22 +266,47 @@ class UvClient {
             return;
         }
 
-        // With elevation=nan the API reports the height of the grid cell it
-        // answered for, and that is the baseline the altitude correction works
-        // against. Without it, the number is the terrain height at our
-        // coordinates - see requestUv(). Assigned
-        // only after ingest has accepted the series: setting it first would
-        // leave a refused fetch pairing the new cell's elevation with the old
-        // cell's series, which is a quietly wrong number rather than an error.
-        // A response with no elevation field is still usable - it corrects for
-        // the surface alone and the screen says "no grid".
-        var elevation = UvNum.asFloat(data.get("elevation"));
-        forecast.gridElevation = elevation;
+        // The baseline for the altitude correction is the height of the grid
+        // cell CAMS computed for. The response names that cell - its
+        // "latitude" and "longitude" are the cell's centre, not ours - and
+        // UvCell keeps the height of the last cell it measured. Same cell: use
+        // it now. New cell: no baseline until requestCellHeight() comes back,
+        // so for a second or two the correction is off and diagnostics says
+        // "no grid". That is an under-report, the safe direction, and far
+        // better than pairing a new cell's forecast with an old cell's height.
+        //
+        // Assigned only after ingest has accepted the series, for the same
+        // reason: a refused fetch must not leave the old series carrying a
+        // new cell's height.
+        //
+        // Each coordinate is read into a local and tested on its own - a
+        // combined null test does not narrow the second one.
+        var needHeight = false;
+        forecast.gridElevation = null;
+        var cellLat = UvNum.asFloat(data.get("latitude"));
+        var cellLon = UvNum.asFloat(data.get("longitude"));
+        if (cellLat != null) {
+            if (cellLon != null) {
+                var known = UvCell.cached(cellLat, cellLon);
+                forecast.gridElevation = known;
+                if (known == null) {
+                    _cellLat = cellLat;
+                    _cellLon = cellLon;
+                    needHeight = true;
+                }
+            }
+        }
 
         forecast.save();
 
         state.errorText = null;
         state.requestInFlight = false;
+
+        // The response's own "elevation" is the terrain height at our exact
+        // coordinates. Not used for anything, but logged: it is the evidence
+        // for what the default field means, which v1c's test part A would have
+        // shown and was skipped.
+        var pointElevation = UvNum.asFloat(data.get("elevation"));
 
         // The console is a far better diagnostic channel than five small lines
         // on a round screen. slot+Ns should land between 0 and 3599; anything
@@ -308,18 +318,97 @@ class UvClient {
             slotText = "slot+" + (now - (base + idx * forecast.stepSeconds)).toString() + "s";
         }
 
+        var grid = forecast.gridElevation;
         var raw = state.rawNow();
         var hour = forecast.stepValueAt(now);
         var eff = state.effectiveNow();
         System.println("UV OK raw=" + (raw == null ? "none" : raw.format("%.2f"))
                        + " hr=" + (hour == null ? "none" : hour.format("%.2f"))
                        + " eff=" + (eff == null ? "none" : eff.format("%.2f"))
-                       + " gridElev=" + (elevation == null ? "ABSENT" : elevation.format("%.0f") + " m")
-                       + (_cellElevation ? " (cell)" : " (point)")
+                       + " cell=" + (cellLat == null ? "?" : cellLat.format("%.2f"))
+                       + "," + (cellLon == null ? "?" : cellLon.format("%.2f"))
+                       + " cellElev=" + (grid == null ? (needHeight ? "pending" : "ABSENT") : grid.format("%.0f") + " m")
+                       + " pointElev=" + (pointElevation == null ? "ABSENT" : pointElevation.format("%.0f") + " m")
                        + " idx=" + idx.toString() + "/" + forecast.hourCount().toString()
                        + " " + slotText
-                       + " alt=" + UvCorrection.altitudePercent(state.watchAltitude, elevation).toString() + "%"
+                       + " alt=" + UvCorrection.altitudePercent(state.watchAltitude, grid).toString() + "%"
                        + " surface=" + UvCorrection.surfacePercent(UvSettings.increment()).toString() + "%");
+
+        _onDone.invoke(true);
+
+        if (needHeight) {
+            requestCellHeight();
+        }
+    }
+
+    // The mean terrain height of the cell, from a grid of points across it.
+    // One request per new cell, ever - see UvCell. The UV reading is already
+    // saved and on screen by the time this runs; a failure here leaves the
+    // altitude correction off ("no grid") and costs nothing else.
+    private function requestCellHeight() as Void {
+        var lat = _cellLat;
+        if (lat == null) {
+            return;
+        }
+        var lon = _cellLon;
+        if (lon == null) {
+            return;
+        }
+
+        var params = {
+            "latitude"  => UvCell.latitudes(lat, lon),
+            "longitude" => UvCell.longitudes(lat, lon)
+        };
+        var options = {
+            :method       => Communications.HTTP_REQUEST_METHOD_GET,
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+        };
+
+        System.println("GET " + ELEVATION_URL + " cell=" + lat.format("%.2f") + ","
+                       + lon.format("%.2f") + " points=" + UvCell.pointCount().toString());
+        Communications.makeWebRequest(ELEVATION_URL, params, options, method(:onCellHeight));
+    }
+
+    public function onCellHeight(code as Number, data as Dictionary or String or Null) as Void {
+        if (_cancelled) {
+            return;
+        }
+        if (code != 200) {
+            System.println("Cell height failed: " + httpHint(code) + "; altitude correction off");
+            return;
+        }
+        if (!(data instanceof Dictionary)) {
+            System.println("Cell height failed: unexpected payload; altitude correction off");
+            return;
+        }
+
+        var heights = data.get("elevation");
+        var mean = UvCell.meanOf(heights);
+        if (mean == null) {
+            System.println("Cell height failed: " + UvCell.validCount(heights).toString() + "/"
+                           + UvCell.pointCount().toString() + " points usable; altitude correction off");
+            return;
+        }
+
+        var lat = _cellLat;
+        if (lat == null) {
+            return;
+        }
+        var lon = _cellLon;
+        if (lon == null) {
+            return;
+        }
+        UvCell.remember(lat, lon, mean);
+
+        var state = UvState.get();
+        var forecast = state.forecast;
+        forecast.gridElevation = mean;
+        forecast.save();
+
+        System.println("Cell height " + mean.format("%.0f") + " m from "
+                       + UvCell.validCount(heights).toString() + "/" + UvCell.pointCount().toString()
+                       + " points, cell=" + lat.format("%.2f") + "," + lon.format("%.2f")
+                       + " alt=" + UvCorrection.altitudePercent(state.watchAltitude, mean).toString() + "%");
 
         _onDone.invoke(true);
     }

@@ -13,17 +13,22 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 **v0 AND v1a ARE BOTH COMPLETE AND CONFIRMED RUNNING** in the simulator on
 2026-09-22.
 
-**UPDATED 2026-09-23 (end of session): v1c BUILDS CLEAN AND RUNS.** But the
-elevation test found that `elevation=nan` makes the air-quality endpoint return
-NO elevation (`gridElev=ABSENT`), so the altitude correction currently has no
-baseline and reads 0% everywhere. **Resolving that is the first job of the next
-session**, before v1b. See the last session log entry. See "Current phase" below and the 2026-09-23 session log entry. The
-order is no longer optional: the review showed v1a's position, altitude and
-freshness logic is what v1b would be built on, and it is wrong.
+**UPDATED 2026-09-23 (latest session): the cell-height fix is WRITTEN, NOT
+COMPILED.** v1c built and ran, but `elevation=nan` returned no elevation at
+all, so the altitude correction had no baseline. Cause, from Open-Meteo's own
+source: it stores **no terrain heights for CAMS**. The app now computes the
+cell height itself - the mean of 49 terrain heights across the CAMS cell, from
+Open-Meteo's Elevation API, once per cell (`UvCell.mc`). **Next: Matt compiles
+and runs "Testing the cell height" in TOOLCHAIN.md.** Then question 25 (now
+re-explained in plain terms in the last session log entry), then v1b. See the
+last session log entry.
 
-1. **v1c** - the correction pass from `docs/REVIEW-v1a-findings.md`. Written
-   2026-09-23. Needs its first compile, and the elevation test part B, which
-   runs on the v1c build itself. See "Testing v1c" in TOOLCHAIN.md.
+The v1c-before-v1b order was not optional: the review showed v1a's position,
+altitude and freshness logic is what v1b would be built on, and it was wrong.
+
+1. **v1c** - the correction pass from `docs/REVIEW-v1a-findings.md`. Built
+   and running 2026-09-23. The cell-height follow-up (`UvCell.mc`) needs its
+   first compile and the test in "Testing the cell height", TOOLCHAIN.md.
 2. **v1b** - the background service, the cached refresh, and the glance
    rewrite. **Read the 2026-09-22 session log entry on the background
    architecture before starting it.** Three platform facts established that day
@@ -149,11 +154,12 @@ two session log entries). v1b waits for v1c, because findings 3, 4, 7 and 10
 change what v1b is built on.
 
 Next action, in order:
-1. **Decide how the app gets a grid-cell height** (question 19, and the
-   options in the last session log entry). Nothing else in v1 matters as much:
-   without it the headline altitude correction is off
-2. Clarify question 25 with Matt in plain terms (he found it unclear)
-3. Then v1b
+1. **Compile and test the cell height** (TOOLCHAIN.md, "Testing the cell
+   height"). Decided and written 2026-09-23; see the last session log entry
+2. Matt decides question 25 - re-explained in plain terms in the last session
+   log entry
+3. Then v1b. Note for its design: the cell-height request is a second network
+   call the background service must either make or leave to the foreground
 
 ---
 
@@ -179,12 +185,12 @@ Next action, in order:
 | 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
-| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Half answered 2026-09-23: `elevation=nan` returns NO elevation field** on this endpoint (HTTP 200, `gridElev=ABSENT`, both Sunshine positions). Part A (what the default returns in relief) was skipped, so the default's meaning is still inferred from the docs, not tested. **Open: where the cell height comes from instead** |
+| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A) |
 | 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | **Answered 2026-09-23: dropped** |
 | 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
 | 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | **Answered 2026-09-23: one decimal.** Already what v1c does |
 | 23 | Situational surface: expire back to grass at local midnight, or after ~12 h? | v1c | **Answered 2026-09-23: local midnight** |
-| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | Open, low priority. **Matt found this unclear as asked - re-explain it in plain terms next session** before asking for a decision. The plain version: should sand/concrete/water stay at their v1a figures, or be cut the way snow was, given the same physics argument applies? |
+| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | Open, low priority. **Re-explained in plain terms 2026-09-23** (last session log entry). Awaiting Matt's choice of A (leave), B (shrink by the snow logic) or C (collapse to grass + snow) |
 | 24 | Which model does the v2 dose-integrator review pass? | v2 review | Open. Matt moved the project to Opus 5.5 on 2026-09-23 and is inclined to use Opus 5.5 at medium effort rather than Fable 5.1, on published benchmarks. Not yet decided |
 
 ---
@@ -243,7 +249,8 @@ Next action, in order:
 | 2026-09-23 | Snow is an increment over CAMS: fresh +17.5%, old +7.5% | CAMS already models snow albedo above 2 cm model snow depth. v1a's +42% counted it again, above the whole measured clear-sky effect of 15-25% |
 | 2026-09-23 | A surface other than grass resets at local midnight | It is situational, and a setting with no exit was a standing weekday over-report after a ski weekend |
 | 2026-09-23 | Position and altitude sampled on every onShow; cached fix over 60 min refused | The distance check could never fire, and a real watch's cached fix is wherever GPS last ran |
-| 2026-09-23 | Request `elevation=nan`; on HTTP 400 or unparseable body, retry once without it | The default `elevation` is the point terrain height, which zeroes the altitude correction on a hill. A refused parameter must not cost a reading |
+| 2026-09-23 | ~~Request `elevation=nan`; on HTTP 400 or unparseable body, retry once without it~~ **SUPERSEDED same day, see next row** | The default `elevation` is the point terrain height, which zeroes the altitude correction on a hill. A refused parameter must not cost a reading |
+| 2026-09-23 | Grid-cell height = mean of 49 Elevation API heights across the cell the UV response names; once per cell, cached | `elevation=nan` returns nothing: Open-Meteo stores no terrain for CAMS. ECMWF builds model terrain as the mean height over each grid box, so this reproduces the same quantity. The response's `latitude`/`longitude` are documented as the cell centre |
 | 2026-09-23 | UV interpolated between hours | Hourly values are instantaneous; the step read was up to 30-50% off on the shoulders |
 | 2026-09-23 | Fresh window 6 h, not 2 h | CAMS runs twice a day; a 2 h refetch returns the same numbers |
 | 2026-09-23 | `migrate()` moved out of `onStart()` | onStart runs in the background process once v1b exists |
@@ -280,6 +287,10 @@ Next action, in order:
 | Loading the setting labels through `Rez` in the glance | A `loadResource` call per draw inside a ~60 kB budget, returning a `Resource` the strict checker will not pass to a `String` parameter. Nine short English strings are cheaper, duplicated deliberately in `settings.xml` |
 | Surroundings / openness `f` in the correction | Not a measurable quantity for the UV index, and it only scaled the reflected term, so "enclosed" did not reduce the number. Removed 2026-09-23. Do not bring back a shade setting that scales anything less than the total |
 | Snow albedo applied as if CAMS knew nothing of snow | CAMS applies a regional snow albedo itself. The app adds only the local increment |
+| `elevation=nan` on the air-quality endpoint | Returns no elevation (tested 2026-09-23). Not a documented air-quality parameter, and Open-Meteo holds no CAMS terrain to return. Issue #1155 was a different bug (a grid flip, fixed in PR #1164) |
+| Using the air-quality `elevation` field as the baseline, with "altitude correction unavailable" on hills | It is the terrain height of the exact spot, so it cancels against the barometer wherever the correction matters. Honest, but it switches the headline feature off permanently |
+| Forecast API `elevation=nan` with an ECMWF model, as a stand-in for CAMS terrain | Returns the 9 km weather model's terrain, not CAMS's ~40 km terrain. In the Rockies those can differ by hundreds of metres, and it leans on the same undocumented behaviour that just failed |
+| A precomputed cell-height table bundled in the app | Needs an offline pipeline Claude's sandbox cannot run, and a global table is ~400,000 cells. The on-watch mean does the same job for one request per cell |
 | Two stacked `popView` calls to leave a submenu | Connect IQ promises nothing about unwinding two views inside one callback. The option delegate updates the parent row's sub-label in place and pops once |
 
 ---
@@ -1108,3 +1119,138 @@ UV OK raw=0.00 hr=0.00 eff=0.00 gridElev=ABSENT (cell) idx=3/48 slot+1607s alt=0
     rather than infer what the default returns in relief
 - `update.bat` branch: pushed to `claude/garmin-uv-tracking-app-7y6gk6`
   (fast-forward) and to the session branch `claude/fable-results-review-nb6cd3`.
+
+### 2026-09-23 - Cell height decided and written. NOT COMPILED
+- Read CLAUDE.md, this file, the review, TOOLCHAIN.md and all thirteen source
+  files first. Then fact-checked the three options from the previous entry.
+
+**Why `elevation=nan` came back empty. Established, not guessed.**
+- Open-Meteo's own source, `Sources/App/Cams/CamsDomain.swift`: the CAMS
+  domains define a grid and nothing else. **No elevation file.**
+  `CamsDownload.swift` downloads no terrain either. So `elevation=nan`
+  ("use the model's cell height") has nothing to look up and comes back
+  empty. That is the cause, and no request parameter can get around it
+- `elevation` is not even a documented parameter on the air-quality API.
+  Only `cell_selection` and `domains` are
+- Issue #1155 is a **different** bug: `elevation=nan` returned 0 in the Alps
+  on the weather API, fixed by PR #1164 ("shift and flip GRIB data for grids
+  starting at 0 deg longitude"). It does not explain ours
+
+**Facts that the chosen fix rests on, each checked**
+- The response's `latitude`/`longitude` are, in Open-Meteo's words, the "WGS84
+  of the center of the weather grid-cell which was used to generate this
+  forecast". So the app can read which cell it was served
+- `cams_global` is a regular 0.4 deg grid anchored at -90 / -180
+  (`RegularGrid(nx: 900, ny: 451, ... dx: 0.4, dy: 0.4)`). **`uv_index`
+  comes only from `cams_global`**, never `cams_europe`, so 0.4 deg holds
+  everywhere. Both Sunshine test points fall in the cell centred 51.2,
+  -115.6 on paper
+- CAMS itself runs at about 40 km (TL511 / N256), and Open-Meteo regrids it
+  to 0.4 deg. **ECMWF builds model terrain as the mean surface height over
+  each grid box**, from a ~1 km dataset. A mean of terrain heights across
+  the cell is therefore the same quantity, computed the same way. The ~0.35
+  vs 0.4 deg mismatch is second order
+- Elevation API: `https://api.open-meteo.com/v1/elevation`, comma-separated
+  `latitude`/`longitude`, **up to 100 points per request**, Copernicus GLO-90
+  (90 m), response `{"elevation":[...]}`, HTTP 400 with a JSON error on bad
+  input. Free for non-commercial use; attribution to Copernicus and
+  Open-Meteo required (relevant to question 5)
+- **Not confirmed:** whether a 49-point request counts as 1 or 49 calls
+  against the 10,000/day free limit. Issue #1295 asks exactly this and has no
+  answer. Either way it is one request per new cell, ever
+
+**The three options, weighed**
+1. **Fall back to the default field, say "unavailable" on hills.** Honest,
+   but the default is the height of the exact spot, so the correction is
+   ~0 wherever it matters, forever. Rejected: it turns the headline feature
+   off rather than fixing it
+2. **Compute the cell mean ourselves.** Chosen. Rests on documented
+   behaviour only, one ~1 kB request per new cell, cached indefinitely
+3. **Find a field that exposes CAMS terrain.** There isn't one on
+   Open-Meteo (no CAMS terrain stored at all). The CAMS data store needs a
+   key, which hard constraint 5 rules out. The weather API's ECMWF terrain is
+   the 9 km model's, not CAMS's. A bundled table cannot be built from here.
+   Rejected
+
+**What changed**
+
+| File | Change |
+|---|---|
+| `UvCell.mc` (new) | 7 x 7 sample grid across the 0.4 deg cell, the mean (at least 40 of 49 heights usable, missing ones left out rather than counted as sea level), and a one-cell cache in Storage (`cla`, `clo`, `ch`) |
+| `UvClient.mc` | `elevation=nan` and its 400-retry removed. Reads the cell centre from the response; cached cell -> baseline at once, new cell -> `gridElevation` null and a second request. `_cancelled` now also checked in `onResponse`. Console: `cell=`, `cellElev=`, `pointElev=` |
+| `TOOLCHAIN.md` | "Testing the cell height" |
+
+- **Ordering is deliberate.** The UV reading is saved and shown first; the
+  height request follows. A new cell has no baseline for a second or two, so
+  the correction is briefly off ("no grid"). An old cell's height is never
+  paired with a new cell's forecast.
+- **A failed height request costs nothing but the correction.** It is not
+  cached, so the next fetch at that cell tries again.
+- **`pointElev=` is logged, not used.** Two different values at the two
+  Sunshine positions would confirm the review's finding 1, the part A that was
+  skipped, at no extra effort.
+- **Expected in the simulator: `alt=-15%` at Sunshine.** The fixed -18 m
+  simulator altitude against a ~2 km mountain cell hits the -1,500 m delta
+  floor. That is correct and does not need fixing.
+- **On a real hill the correction can be negative**, and that is physics,
+  not a bug. It is measured from the cell's mean height. If the cell is
+  mostly peaks and high benches, standing at a base area below that mean
+  means CAMS already assumed more altitude than you have.
+- **Riskiest new surface for the compiler:** none that is new to the project.
+  The same `makeWebRequest` callback signature, `Storage`, the `asFloat`
+  pattern and nested null tests all compile already. The module constant
+  arithmetic in `UvCell` (`SPACING / SIDE`) is the only new shape.
+- **Riskiest at runtime:** the request URL is about 1 kB after the commas are
+  URL-encoded. No documented Connect IQ limit was found either way. If it is
+  refused, the console says `Cell height failed: HTTP ...` and the fix is
+  fewer points (5 x 5).
+- **Unverified side note, not acted on:** Open-Meteo's air-quality docs list
+  CAMS global as "3-hourly", while ECMWF says CAMS surface fields are hourly.
+  If Open-Meteo interpolates UV to hourly, the finding-5 interpolation is
+  interpolating an interpolation. It changes nothing in v1c.
+- **v1b consequence:** the background service needs the cell height too. It
+  cannot write storage, so either it returns a new cell's height in the
+  `Background.exit()` payload, or it leaves new cells to the foreground and
+  sends `gridElevation` null. Decide when v1b is designed.
+
+**Question 25, re-explained in plain terms** (Matt found the first version
+unclear)
+
+The surface setting adds a percentage for what you are standing on: fresh snow
++17.5%, old snow +7.5%, sand +9%, concrete +5%, water +3.5%, grass +1.5%.
+
+The number on screen is the **UV index**, which measures the UV landing on a
+flat, face-up surface like a table top. Bright ground raises it in only one
+way: UV bounces off the ground, goes back up into the air, gets scattered, and
+some comes back down onto the table top. That round trip happens over
+kilometres of landscape, so **it depends on how bright the whole area is, not
+the patch under your boots.**
+
+That is why snow was cut from +42% to +17.5%. A piste on its own adds much
+less to the index than the old formula claimed, and the forecast already
+allows for snow across the area.
+
+**The question:** sand, concrete and water still use the old formula that was
+thrown out for snow - "how reflective is the surface, times a half". The same
+argument says they are too high as well. A beach is a strip of sand beside a
+lot of water and land that reflects less. By rough scaling from the snow
+measurements, **my estimate, not a measured figure**, a whole region of dry
+sand might lift the index by a few percent, and a strip of beach by less.
++9% is probably at or above the top of that.
+
+What the figures do NOT capture: reflected light hits your **skin**
+directly - under the chin, the nose, the eyes. On a beach, UV measured at eye
+level can be about double what it is over grass. That is real, but it is
+about the dose to your face, which is v2's job, not the index on screen.
+
+The options:
+- **A. Leave them.** Simple, errs high. Keeps the oddity that sand beats old
+  snow
+- **B. Shrink them by the same logic as snow.** More consistent. The next
+  session would derive and source the figures first; none are proposed here
+- **C. Collapse the list** to grass/ground plus the two snows. At the index
+  level the non-snow differences are about the size of the model's own error
+  bars, so the choice may be false precision. The skin-level effects come
+  back properly in v2
+
+Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
