@@ -13,13 +13,14 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 **v0 AND v1a ARE BOTH COMPLETE AND CONFIRMED RUNNING** in the simulator on
 2026-09-22.
 
-**UPDATED 2026-09-23: the cold review is done and verified. Next is v1c, then
-v1b.** See "Current phase" below and the 2026-09-23 session log entry. The
+**UPDATED 2026-09-23: v1c IS WRITTEN AND PUSHED, NOT YET COMPILED.** Next is
+Matt's build of v1c plus the elevation test, then v1b. See "Current phase" below and the 2026-09-23 session log entry. The
 order is no longer optional: the review showed v1a's position, altitude and
 freshness logic is what v1b would be built on, and it is wrong.
 
-1. **v1c** - the correction pass from `docs/REVIEW-v1a-findings.md`. Blocked
-   on the elevation test (part A) and four decisions from Matt.
+1. **v1c** - the correction pass from `docs/REVIEW-v1a-findings.md`. Written
+   2026-09-23. Needs its first compile, and the elevation test part B, which
+   runs on the v1c build itself. See "Testing v1c" in TOOLCHAIN.md.
 2. **v1b** - the background service, the cached refresh, and the glance
    rewrite. **Read the 2026-09-22 session log entry on the background
    architecture before starting it.** Three platform facts established that day
@@ -140,18 +141,15 @@ decides it), CAMS already applies a snow albedo so the app's +42% double
 counts, position and altitude are only sampled when a fetch starts so the
 distance check can never fire, and a real watch's cached fix is of unknown age.
 
-**2026-09-23: the review has been verified** (see that day's session log).
-Every code-path claim was re-traced and holds; the Open-Meteo and CAMS claims
-were re-checked against sources and hold, with one minor discrepancy noted.
-**Next phase is v1c** - a correction pass on v1a - and **v1b waits for it**,
-because findings 3, 4, 7 and 10 change what v1b is built on.
+**2026-09-23: the review has been verified, and v1c written** (see that day's
+two session log entries). v1b waits for v1c, because findings 3, 4, 7 and 10
+change what v1b is built on.
 
 Next action, in order:
-1. **Matt: the elevation test, part A** (current build, no code change) -
-   see the 2026-09-23 log entry for the exact steps
-2. **Matt: four design decisions** (listed in the same entry) - Surroundings,
-   the snow figures, how the corrected number is printed, surface expiry
-3. Claude writes v1c as one bundled change, so it costs one compile loop
+1. **Matt, optional, BEFORE pulling:** elevation test part A on the v1a build
+2. **Matt: pull, build v1c, report the compile result**
+3. **Matt: elevation test part B** on the v1c build
+4. **Matt: one open decision** - how the corrected number is printed (22)
 
 ---
 
@@ -178,10 +176,11 @@ Next action, in order:
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
 | 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | Open - simulator test, part A needs no code change |
-| 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | Open - Matt's call. Review recommends drop |
-| 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | Open - Matt's call |
-| 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | Open - Matt's call |
-| 23 | Situational surface: expire back to grass at local midnight, or after ~12 h? | v1c | Open - Matt's call |
+| 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | **Answered 2026-09-23: dropped** |
+| 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
+| 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | Open - Matt's call. v1c keeps one decimal until decided |
+| 23 | Situational surface: expire back to grass at local midnight, or after ~12 h? | v1c | **Answered 2026-09-23: local midnight** |
+| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | Open - Matt's call, low priority: none is the ski case |
 | 24 | Which model does the v2 dose-integrator review pass? | v2 review | Open. Matt moved the project to Opus 5.5 on 2026-09-23 and is inclined to use Opus 5.5 at medium effort rather than Fable 5.1, on published benchmarks. Not yet decided |
 
 ---
@@ -235,6 +234,15 @@ Next action, in order:
 | 2026-09-22 | Per-profile "this one is outdoors" setting, default off | Covers the outdoor activity recorded with GPS off, which is otherwise permanently ambiguous. Set once for Trail Run and never thought about again |
 | 2026-09-22 | GPS quality is gated on for exposure detection but deliberately NOT for the forecast fetch | Same field, two jobs. A last-known fix is fine for picking a 40 km grid cell; it is useless for telling a treadmill from a road. A future session must not "fix" this inconsistency |
 | 2026-09-22 | Fable 5.1 does a review pass when v1a is green, and again at the v2 dose integrator | It is Anthropic's most capable widely released model, for demanding reasoning and long-horizon agentic work. The dose integrator is the health-adjacent maths where being wrong matters to skin |
+| 2026-09-23 | v1c (correction pass) comes before v1b | The review showed v1a's position, altitude and freshness logic - what v1b would be built on - was wrong |
+| 2026-09-23 | Surroundings setting dropped | It scaled only the reflected term, so "Enclosed: forest" left nearly all forest UV untouched while the wearer believed shade was counted. f is not a measurable quantity for the UV index. The number is for open sky; shade becomes a v2 dose pause |
+| 2026-09-23 | Snow is an increment over CAMS: fresh +17.5%, old +7.5% | CAMS already models snow albedo above 2 cm model snow depth. v1a's +42% counted it again, above the whole measured clear-sky effect of 15-25% |
+| 2026-09-23 | A surface other than grass resets at local midnight | It is situational, and a setting with no exit was a standing weekday over-report after a ski weekend |
+| 2026-09-23 | Position and altitude sampled on every onShow; cached fix over 60 min refused | The distance check could never fire, and a real watch's cached fix is wherever GPS last ran |
+| 2026-09-23 | Request `elevation=nan`; on HTTP 400 or unparseable body, retry once without it | The default `elevation` is the point terrain height, which zeroes the altitude correction on a hill. A refused parameter must not cost a reading |
+| 2026-09-23 | UV interpolated between hours | Hourly values are instantaneous; the step read was up to 30-50% off on the shoulders |
+| 2026-09-23 | Fresh window 6 h, not 2 h | CAMS runs twice a day; a 2 h refetch returns the same numbers |
+| 2026-09-23 | `migrate()` moved out of `onStart()` | onStart runs in the background process once v1b exists |
 | 2026-09-22 | The Fable brief is written differently from this repo's house style, on purpose | Anthropic's own migration guidance: prompts written for prior models are often too prescriptive on Fable and reduce output quality. CLAUDE.md and this file are deliberately prescriptive, which has served Opus well and would work against Fable |
 
 ---
@@ -266,6 +274,8 @@ Next action, in order:
 | Calling `Position.getInfo()` inside the background service | Reported to fail with permission and invocation errors from a background process. The foreground writes the last-known fix to storage and the background reads it |
 | Storing parallel arrays of timestamps and values | Doubles the storage for a series that is uniformly hourly. Base plus step, with uniformity verified at parse time, costs nothing and cannot drift |
 | Loading the setting labels through `Rez` in the glance | A `loadResource` call per draw inside a ~60 kB budget, returning a `Resource` the strict checker will not pass to a `String` parameter. Nine short English strings are cheaper, duplicated deliberately in `settings.xml` |
+| Surroundings / openness `f` in the correction | Not a measurable quantity for the UV index, and it only scaled the reflected term, so "enclosed" did not reduce the number. Removed 2026-09-23. Do not bring back a shade setting that scales anything less than the total |
+| Snow albedo applied as if CAMS knew nothing of snow | CAMS applies a regional snow albedo itself. The app adds only the local increment |
 | Two stacked `popView` calls to leave a submenu | Connect IQ promises nothing about unwinding two views inside one callback. The option delegate updates the parent row's sub-label in place and pops once |
 
 ---
@@ -1010,11 +1020,45 @@ becomes the correction's baseline. Anything else is issue #1155, and the
 fallback is to say on screen that the altitude correction is unavailable
 rather than print "+0%".
 
-**Branch note.** This session was assigned
-`claude/fable-results-review-nb6cd3`. The review itself was on
-`claude/trusting-ride-13tzxx`. Matt's clone tracks
-`claude/garmin-uv-tracking-app-7y6gk6`, so **neither reaches `update.bat`**
-until it is merged into that branch. Matt to decide how.
+**Branch note (resolved).** Matt asked for the work to go to the branch
+`update.bat` pulls, `claude/garmin-uv-tracking-app-7y6gk6`, as previous
+sessions did. Pushed there as a fast-forward.
 
 - Build plan not yet edited: no decision has changed yet. It gets updated
   when the four decisions are made.
+
+### 2026-09-23 - v1c written. NOT COMPILED
+- Matt's decisions: **drop Surroundings, accept the snow figures, reset the
+  surface at local midnight.** Corrected-number format (question 22) not yet
+  answered, so v1c keeps one decimal.
+- **What v1c changes**, file by file:
+
+| File | Change | Finding |
+|---|---|---|
+| `UvSense.mc` (new) | Barometric altitude and cached fix, read from what the system holds. Fix range-guarded and age-checked (over 60 min refused); age recorded | 3, 4 |
+| `UvMainView.mc` | `onShow()` samples position and altitude, and expires the surface, before judging freshness. Surface word always shown. Expired number grey. Diagnostics shows fix age. Settings page shows one setting and "shade not modelled" | 3, 6, 8, 10 |
+| `UvClient.mc` | Uses `UvSense`. `_cancelled` flag. Requests `elevation=nan`; retries once without it on 400 or a parse failure. Console gains `hr=` and `(cell)`/`(point)` | 1, 10 |
+| `UvForecast.mc` | Interpolates between hours; `stepValueAt()` for the console. Fresh window 6 h | 5, 7 |
+| `UvSettings.mc` | Surroundings removed. Surface is an increment, not albedo x openness. Midnight reset via two Storage keys; reading never writes, the app writes the reset | 2, 6, 8 |
+| `UvCorrection.mc` | `surfaceFactor(increment)` replaces `albedoFactor(albedo, openness)` | 2, 6 |
+| `UvSettingsMenu.mc` | Opens the surface list directly; the one-row top menu and its delegate are gone | 6 |
+| `UvGuardApp.mc` | `migrate()` moved to `getInitialView()` / `getGlanceView()` | 10 |
+| `UvState.mc` | `fixAgeSeconds`. A restored position is no longer labelled a cached fix | 4 |
+| `UvGlanceView.mc` | Expired reading grey | 10 |
+| resources | `openness` property, setting and strings removed; surface prompt rewritten | 6 |
+
+- **No schema bump.** The new Storage keys are additive and absent keys are
+  handled; a bump would wipe the cache for nothing. A watch with `openness`
+  set keeps an orphaned property nothing reads.
+- **The elevation test now runs on v1c.** Part A (optional) must be done on
+  the v1a build, i.e. before `update.bat`. Part B is simply two fetches on v1c
+  at the two Sunshine positions; the console marks `(cell)` or `(point)`.
+- **Riskiest new surface for the compiler:** `Position.Info.when`,
+  `Time.today()`, and `Dictionary.put` on the params literal - none used
+  before in this project. Compound null tests before arithmetic were split.
+- **Riskiest new surface at runtime:** the fix-age gate in the simulator.
+  Nobody knows what the simulator puts in `when`. If it reports an old
+  timestamp, every fetch falls through to a one-shot GPS that timed out in the
+  simulator once before. The console line `Cached fix too old` names it.
+- Sand (+9%) now exceeds old snow (+7.5%). Deliberate for now; question 25.
+- Build plan updated for the three decisions.

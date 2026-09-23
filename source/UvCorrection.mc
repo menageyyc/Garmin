@@ -6,7 +6,14 @@ import Toybox.Lang;
 // are 900 m above the mean elevation of its 40 km grid cell, standing on
 // snow. Those two facts are the watch's, and they are multiplicative:
 //
-//   UVI_eff = UVI_api * (1 + k_alt * (h_watch - h_grid) / 1000) * (1 + f * a)
+//   UVI_eff = UVI_api * (1 + k_alt * (h_watch - h_grid) / 1000) * (1 + s)
+//
+// s is the surface increment from UvSettings. v1a had s = f * albedo, with f an
+// invented "fraction of the surface in view". The 2026-09-23 review showed f
+// does not correspond to anything measurable for the UV index (horizontal
+// irradiance, raised by snow through ground-atmosphere multiple scattering,
+// not by how much ground you can see), so the surface now carries its own
+// increment directly.
 //
 // Pure arithmetic, no I/O, no state. (:glance) only for now - v1b adds
 // (:background) here together with the service and the manifest permission,
@@ -30,8 +37,9 @@ module UvCorrection {
     const DELTA_MIN = -1500.0;
     const DELTA_MAX = 4500.0;
 
-    // f * albedo, capped. Fresh snow fully in view is 0.5 * 0.85 = 0.425, so
-    // 0.60 leaves headroom without letting a mis-set pair reach absurdity.
+    // The surface increment, capped. Fresh snow is now +17.5%, so 0.60 is far
+    // above anything the settings produce; it exists so a future mis-set value
+    // cannot reach absurdity.
     const REFLECT_MAX = 0.60;
 
     // Returns 1.0 - no correction - when either input is missing. A watch with
@@ -58,21 +66,19 @@ module UvCorrection {
         return 1.0 + K_ALT * delta / 1000.0;
     }
 
-    // albedo is the surface reflectance; openness is f, the fraction of that
-    // surface in view. Both come from settings, so both are approximations the
-    // wearer supplied rather than anything measured.
-    function albedoFactor(albedo as Float, openness as Float) as Float {
-        var reflected = albedo * openness;
-        if (reflected < 0.0) { reflected = 0.0; }
-        if (reflected > REFLECT_MAX) { reflected = REFLECT_MAX; }
-        return 1.0 + reflected;
+    // increment is the surface's own addition to the index, from settings - a
+    // figure the wearer chose, not anything measured.
+    function surfaceFactor(increment as Float) as Float {
+        var s = increment;
+        if (s < 0.0) { s = 0.0; }
+        if (s > REFLECT_MAX) { s = REFLECT_MAX; }
+        return 1.0 + s;
     }
 
     function effective(raw as Float,
                        watchAltitude as Float or Null,
                        gridElevation as Float or Null,
-                       albedo as Float,
-                       openness as Float) as Float {
+                       increment as Float) as Float {
         // Nothing to amplify. Guards against a negative sentinel leaking in
         // from a stored series as well as the honest zero of a night hour.
         if (raw <= 0.0) {
@@ -80,7 +86,7 @@ module UvCorrection {
         }
         return raw
                * altitudeFactor(watchAltitude, gridElevation)
-               * albedoFactor(albedo, openness);
+               * surfaceFactor(increment);
     }
 
     // For the screen: each term as a signed whole percentage, so the wearer can
@@ -90,7 +96,7 @@ module UvCorrection {
         return ((altitudeFactor(watchAltitude, gridElevation) - 1.0) * 100.0).toNumber();
     }
 
-    function albedoPercent(albedo as Float, openness as Float) as Number {
-        return ((albedoFactor(albedo, openness) - 1.0) * 100.0).toNumber();
+    function surfacePercent(increment as Float) as Number {
+        return ((surfaceFactor(increment) - 1.0) * 100.0).toNumber();
     }
 }

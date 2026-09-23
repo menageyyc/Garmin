@@ -8,11 +8,13 @@ class UvGuardApp extends Application.AppBase {
         AppBase.initialize();
     }
 
-    // The storage migration runs before anything reads storage, and only ever
-    // from the foreground or the glance. A background process cannot be relied
-    // on to write storage at all, so it must never be what runs a migration.
+    // Deliberately empty. The storage migration used to run here, but
+    // onStart() runs in every process the app has - including the background
+    // service v1b adds, where it fires before getServiceDelegate() and there
+    // is nothing yet to tell which process this is. A background process
+    // cannot be relied on to write storage, so the migration moved to the two
+    // entry points that are foreground by definition (2026-09-23 review).
     function onStart(state as Dictionary or Null) as Void {
-        UvState.migrate();
     }
 
     function onStop(state as Dictionary or Null) as Void {
@@ -34,6 +36,7 @@ class UvGuardApp extends Application.AppBase {
     // objects. It never runs in the glance scope, so the complaint is spurious.
     (:typecheck(false))
     function getInitialView() {
+        UvState.migrate();
         var view = new UvMainView();
         return [view, new UvMainDelegate(view)];
     }
@@ -42,6 +45,7 @@ class UvGuardApp extends Application.AppBase {
     // this generation of hardware. Widgets no longer exist on epix Pro.
     (:glance)
     function getGlanceView() {
+        UvState.migrate();
         return [new UvGlanceView()];
     }
 }

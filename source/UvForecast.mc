@@ -41,9 +41,15 @@ class UvForecast {
     // round-trips a null inside an array loosely enough that it is not worth
     // relying on, and a negative UV index is impossible, so the sentinel
     // cannot be mistaken for data. ingest() writes it; valueAt() reads it.
-    // CAMS is hourly. Past two hours the cloud state it described has moved
-    // on, even though the hour slot it covers is still the right one.
-    private const FRESH_SECONDS = 7200;
+
+    // Fetch age is not data age. CAMS runs twice a day, so a refetch two hours
+    // later returns the same model run and the same numbers; v1a's two-hour
+    // "fresh" window marked a reading yellow when nothing had changed and a
+    // refetch would not have fixed it. Six hours is inside one run. What
+    // actually makes the cache wrong is a new run landing, or moving to a
+    // different cell - which the distance check now catches, because the
+    // current position is sampled on every show (2026-09-23 review).
+    private const FRESH_SECONDS = 21600;
     private const USABLE_SECONDS = 43200;
 
     // The CAMS cell is roughly 40 km, so 25 km is comfortably inside the cell
@@ -97,8 +103,17 @@ class UvForecast {
         return idx;
     }
 
-    // The raw API value for that hour, before any on-watch correction. Null
+    // The raw API value for this instant, before any on-watch correction. Null
     // means no value - out of range, or a gap the model left in the series.
+    //
+    // Interpolated between the hour either side. Open-Meteo's hourly values
+    // are instantaneous at the indicated hour, so v1a's step read showed the
+    // 15:00 value until 15:59 - up to 30-50% off on the shoulders of the day,
+    // which in a Canadian winter is most of the ski day. At a gap in the model
+    // series, or at the end of it, this falls back to the hour's own value.
+    //
+    // Consequence for the console: "raw=" no longer equals the JSON value for
+    // the hour except at the top of it. That is not a UTC regression.
     public function valueAt(epoch as Number) as Float or Null {
         var idx = indexAt(epoch);
         if (idx < 0) {
@@ -108,11 +123,48 @@ class UvForecast {
         if (vals == null) {
             return null;
         }
-        var v = UvNum.asFloat(vals[idx]);
-        if (v == null || v < 0.0) {
+        var base = baseEpoch;
+        if (base == null) {
             return null;
         }
-        return v;
+        // Two single tests, not one compound one: v is used in arithmetic
+        // below, and a combined null test does not narrow reliably here.
+        var v = UvNum.asFloat(vals[idx]);
+        if (v == null) {
+            return null;
+        }
+        if (v < 0.0) {
+            return null;
+        }
+
+        if (idx + 1 >= vals.size()) {
+            return v;
+        }
+        var next = UvNum.asFloat(vals[idx + 1]);
+        if (next == null) {
+            return v;
+        }
+        if (next < 0.0) {
+            return v;
+        }
+
+        var elapsed = epoch - (base + idx * stepSeconds);
+        var frac = elapsed.toFloat() / stepSeconds.toFloat();
+        return v + (next - v) * frac;
+    }
+
+    // The hour's own value, uninterpolated. Only for the console, so a future
+    // session can still compare against the JSON.
+    public function stepValueAt(epoch as Number) as Float or Null {
+        var idx = indexAt(epoch);
+        if (idx < 0) {
+            return null;
+        }
+        var vals = values;
+        if (vals == null) {
+            return null;
+        }
+        return UvNum.asFloat(vals[idx]);
     }
 
     public function ageSeconds(nowEpoch as Number) as Number or Null {

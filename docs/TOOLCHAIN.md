@@ -474,7 +474,7 @@ at 18:00 local in Calgary and leaves the cache useless all evening.
 
 Two routes, both writing the same store.
 
-**On the watch:** MENU -> Surface or Surroundings -> pick one. The number on
+**On the watch:** MENU -> Surface -> pick one. (v1a also had Surroundings; removed in v1c.) The number on
 the reading page changes as soon as you back out. This is the route that
 matters - you change the surface when you arrive at the ski hill, not when you
 install the app.
@@ -510,3 +510,48 @@ UV OK raw=9.50 eff=13.54 gridElev=4 m idx=14/48 slot+707s alt=-2% albedo=+42%
       show the value the watch wrote? Both should be reading the same store
 - [ ] Note the app memory budget the simulator reports now that the glance
       scope has grown. The glance read `~6.8/59.9 kB` in v0
+
+---
+
+## Testing v1c
+
+v1c is the correction pass from the v1a review. Same build loop. What changed
+on screen:
+
+- **Surroundings is gone.** The settings page and MENU go straight to the
+  surface list. The settings page ends `open sky; shade not modelled`
+- **Fresh snow now reads `about +17% fresh snow`**, not `+42%`. Old snow is
+  `about +7%`. The other surfaces are unchanged
+- **The surface word always shows.** `grass, no correction` in a city,
+  `grass` under an altitude line. Any surface other than grass resets to grass
+  at local midnight
+- **Diagnostics has a new second line:** `live GPS fix`, `cached fix, 3 min`,
+  `cached fix, age ?` or `from last fetch`
+- **An expired reading draws its number grey**, not in band colour
+- **The number between hours is smoothed**, so it moves a little every
+  minute. The console `raw=` is the smoothed value; `hr=` is the hour's own
+  value from the JSON. They differ except at the top of the hour. **That is
+  not a UTC regression**
+
+### What to watch in the console
+
+```
+GET ... lat=51.1150 lon=-115.7630 days=2 elev=nan
+UV OK raw=1.84 hr=1.70 eff=... gridElev=1720 m (cell) idx=... slot+... alt=... surface=1%
+```
+
+- `elev=nan` and `(cell)` mean the app asked for the grid cell's own height
+- `Code 400 with elevation=nan; retrying without it` then `(point)` means
+  Open-Meteo refused it. The app still works; report the line
+- `GPS cached ... age=12 s` / `age=unknown` - how old the simulator says its
+  fix is. **Worth reporting either way**; nobody knows yet what the simulator
+  puts there
+- `Cached fix too old: 2 d` then `acquiring one-shot GPS` means the age gate
+  refused the fix. If that happens on every START in the simulator and ends in
+  `GPS timed out`, report it - it is the one thing in v1c that could get in
+  the way of testing, and it has a small fix
+
+### The elevation test, part B
+
+In `STATE.md`, 2026-09-23 entry. Two positions 4 km apart, copy both `UV OK`
+lines.

@@ -1,10 +1,11 @@
 <settings>
     <!--
       The phone-side editor, for people who prefer a phone keyboard to a watch
-      bezel. Both settings are also on the watch under MENU, because they are
-      situational: you change the surface when you arrive at the ski hill, not
+      bezel. The surface is also on the watch (settings page, or MENU), because
+      it is situational: you change it when you arrive at the ski hill, not
       when you install the app. Both routes write the same Application.
-      Properties store, so neither shadows the other.
+      Properties store, so neither shadows the other. Any surface other than
+      grass resets at local midnight.
 
       The labels here are duplicated in source/UvSettings.mc, which is what the
       on-watch menu draws. Loading them through Rez instead would cost a
@@ -14,7 +15,7 @@
 
       Test these from the IDE's App Settings Editor, not the simulator's own
       File menu - the simulator-side editor has a long-standing bug where it
-      ignores listEntry values, and every setting here is a list.
+      ignores listEntry values, and the setting here is a list.
     -->
     <setting propertyKey="@Properties.surface" title="@Strings.SurfaceTitle" prompt="@Strings.SurfacePrompt">
         <settingConfig type="list">
@@ -24,14 +25,6 @@
             <listEntry value="3">@Strings.SurfaceSand</listEntry>
             <listEntry value="4">@Strings.SurfaceOldSnow</listEntry>
             <listEntry value="5">@Strings.SurfaceFreshSnow</listEntry>
-        </settingConfig>
-    </setting>
-
-    <setting propertyKey="@Properties.openness" title="@Strings.OpennessTitle" prompt="@Strings.OpennessPrompt">
-        <settingConfig type="list">
-            <listEntry value="0">@Strings.OpennessOpen</listEntry>
-            <listEntry value="1">@Strings.OpennessPartly</listEntry>
-            <listEntry value="2">@Strings.OpennessEnclosed</listEntry>
         </settingConfig>
     </setting>
 </settings>

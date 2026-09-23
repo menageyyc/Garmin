@@ -44,9 +44,18 @@ class UvMainView extends WatchUi.View {
 
     // The cache is the whole point of v1, so the network is a fallback rather
     // than a reflex: fetch only when what is stored cannot answer for this
-    // hour, or is old enough that the cloud state it described has moved on.
+    // hour, is older than one CAMS run, or was fetched for somewhere else.
     // START forces a fetch regardless, which is also the test loop.
+    //
+    // Position and altitude are read first, from what the system already
+    // holds. In v1a they were read only when a fetch started, so "have you
+    // moved?" compared the fetch position with itself and never fired. They
+    // are not persisted here; a fetch persists what it used.
     function onShow() as Void {
+        UvSense.sampleAltitude();
+        UvSense.sampleCachedFix();
+        UvSettings.expireSurface();
+
         var state = UvState.get();
         if (state.cacheState() != CACHE_CURRENT) {
             refetch();
@@ -79,7 +88,7 @@ class UvMainView extends WatchUi.View {
     }
 
     // START means refresh everywhere except the settings page, where it opens
-    // the picker. The settings menu also hangs off MENU, but MENU is a long
+    // the surface picker. The settings menu also hangs off MENU, but MENU is a long
     // press of UP on this hardware and Garmin's own forums carry reports of
     // onMenu() never firing on some fenix and epix models. A feature reachable
     // only through a button behaviour with that track record is a feature that
@@ -206,6 +215,13 @@ class UvMainView extends WatchUi.View {
             label = uv.format("%.1f");
             colour = UvScale.colour(uv);
             band = UvScale.riskBand(uv);
+
+            // Expired means a different sky or more than 12 hours old. Drawn
+            // big and banded in colour, "a number for somewhere else" looked
+            // exactly like "a number for here"; grey is the difference.
+            if (state.cacheState() == CACHE_EXPIRED) {
+                colour = Graphics.COLOR_LT_GRAY;
+            }
         } else if (state.requestInFlight) {
             label = "...";
             colour = Graphics.COLOR_LT_GRAY;
@@ -234,24 +250,33 @@ class UvMainView extends WatchUi.View {
             tints.add(Graphics.COLOR_WHITE);
         }
 
-        // A term that rounds to nothing is not worth a line. In a city both do,
-        // and saying so once is more honest than two rows of "+0%".
+        // A percentage under 2% is not printed - it is inside the model's own
+        // error bars. But the surface NAME is always printed: on the hill with
+        // the surface never set, "the app thinks you are on grass" is the one
+        // thing the wearer needs to see, and v1a hid the word along with the
+        // number (2026-09-23 review, finding 8).
+        var surface = UvSettings.surface();
+        var surfaceWord = UvSettings.surfaceName(surface).toLower();
         var altPct = UvCorrection.altitudePercent(state.watchAltitude, state.forecast.gridElevation);
-        var albPct = UvCorrection.albedoPercent(UvSettings.albedo(), UvSettings.fraction());
+        var surfPct = UvCorrection.surfacePercent(UvSettings.surfaceIncrement(surface));
 
         var showAlt = (altPct >= MIN_SHOWN_PERCENT) || (altPct <= -MIN_SHOWN_PERCENT);
-        var showAlb = (albPct >= MIN_SHOWN_PERCENT) || (albPct <= -MIN_SHOWN_PERCENT);
+        var showSurf = (surfPct >= MIN_SHOWN_PERCENT) || (surfPct <= -MIN_SHOWN_PERCENT);
 
         if (showAlt) {
             lines.add(signed(altPct) + "% altitude");
             tints.add(Graphics.COLOR_LT_GRAY);
         }
-        if (showAlb) {
-            lines.add(signed(albPct) + "% " + UvSettings.surfaceName(UvSettings.surface()).toLower());
+        if (showSurf) {
+            // "about": the surface figures are estimates, and the snow ones
+            // are only the residual over what CAMS already modelled.
+            lines.add("about " + signed(surfPct) + "% " + surfaceWord);
             tints.add(Graphics.COLOR_LT_GRAY);
-        }
-        if (!showAlt && !showAlb && raw != null) {
-            lines.add("no correction");
+        } else if (!showAlt && raw != null) {
+            lines.add(surfaceWord + ", no correction");
+            tints.add(Graphics.COLOR_DK_GRAY);
+        } else {
+            lines.add(surfaceWord);
             tints.add(Graphics.COLOR_DK_GRAY);
         }
 
@@ -272,8 +297,9 @@ class UvMainView extends WatchUi.View {
         var lat = state.latitude;
         var lon = state.longitude;
         if (lat != null && lon != null) {
-            lines.add(lat.format("%.2f") + ", " + lon.format("%.2f")
-                      + (state.fixSource == FIX_CACHED ? " (cached)" : ""));
+            lines.add(lat.format("%.2f") + ", " + lon.format("%.2f"));
+            tints.add(Graphics.COLOR_WHITE);
+            lines.add(fixText(state));
         } else {
             lines.add("No position");
         }
@@ -305,24 +331,46 @@ class UvMainView extends WatchUi.View {
         drawStack(dc, w, h, top + dc.getFontHeight(Graphics.FONT_XTINY), lines, tints);
     }
 
-    // The settings page exists so the pickers are reachable without MENU. It
-    // also shows what the current pair is actually worth, which is the honest
+    // The settings page exists so the picker is reachable without MENU. It
+    // also shows what the current surface is worth, which is the honest
     // answer to "why is this app's number different from the others".
     private function drawSettings(dc as Graphics.Dc, w as Number, h as Number) as Void {
         var top = (h * 0.16).toNumber();
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, top, Graphics.FONT_XTINY, "SETTINGS", Graphics.TEXT_JUSTIFY_CENTER);
 
-        var albPct = UvCorrection.albedoPercent(UvSettings.albedo(), UvSettings.fraction());
+        var surface = UvSettings.surface();
+        var pct = UvCorrection.surfacePercent(UvSettings.surfaceIncrement(surface));
 
-        var lines = ["Surface", UvSettings.surfaceName(UvSettings.surface()),
-                     "Surroundings", UvSettings.opennessName(UvSettings.openness()),
-                     "reflected " + signed(albPct) + "%"];
+        var lines = ["Surface", UvSettings.surfaceName(surface),
+                     "about " + signed(pct) + "% UV",
+                     surface == UvSettings.SURFACE_DEFAULT ? "default" : "until midnight",
+                     "open sky; shade not modelled"];
         var tints = [Graphics.COLOR_DK_GRAY, Graphics.COLOR_WHITE,
-                     Graphics.COLOR_DK_GRAY, Graphics.COLOR_WHITE,
-                     Graphics.COLOR_LT_GRAY];
+                     Graphics.COLOR_LT_GRAY, Graphics.COLOR_DK_GRAY,
+                     Graphics.COLOR_DK_GRAY];
 
         drawStack(dc, w, h, top + dc.getFontHeight(Graphics.FONT_XTINY), lines, tints);
+    }
+
+    // Where the fix came from and how old it was when read. "(cached, 2 d)" is
+    // a very different claim from "(cached, 3 min)", and v1a printed both as
+    // "(cached)".
+    private function fixText(state as UvState) as String {
+        if (state.fixSource == FIX_LIVE) {
+            return "live GPS fix";
+        }
+        var age = state.fixAgeSeconds;
+        if (state.fixSource == FIX_CACHED) {
+            if (age == null) {
+                return "cached fix, age ?";
+            }
+            return "cached fix, " + UvSense.ageText(age);
+        }
+        // The position shown is restored from the last fetch. On a real watch
+        // this is also what you see when the cached fix was refused as too
+        // old - the console says which.
+        return "from last fetch";
     }
 
     // One line per question, flowed down from a measured starting point.

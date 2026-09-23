@@ -7,7 +7,7 @@ import Toybox.Time;
 // enums here, less so nested in a class body.
 (:glance)
 enum FixSource {
-    FIX_NONE = 0,
+    FIX_NONE = 0,       // no fix read this run; any position is from the last fetch
     FIX_CACHED = 1,     // Position.getInfo(), free, possibly old
     FIX_LIVE = 2        // a real one-shot acquisition
 }
@@ -36,6 +36,12 @@ class UvState {
     public var latitude as Float or Null = null;
     public var longitude as Float or Null = null;
     public var fixSource as Number = FIX_NONE;
+
+    // How old the fix was when it was read, in seconds. Null means unknown -
+    // the platform did not say. Not persisted: it describes this run's read.
+    // Added 2026-09-23: a real watch's cached fix is wherever GPS last ran,
+    // which can be another town days ago, and "(cached)" alone hid that.
+    public var fixAgeSeconds as Number or Null = null;
 
     // Metres, barometric where available. Persisted because the glance has no
     // way to take a fresh reading cheaply and the correction needs a number.
@@ -69,9 +75,15 @@ class UvState {
         forecast = new UvForecast();
     }
 
-    // Called once from the app before anything reads storage. Safe to call
-    // from the foreground only - a background process cannot be relied on to
-    // write storage, so it must never be the thing that runs a migration.
+    // Called from getInitialView() and getGlanceView() before anything reads
+    // storage - never from AppBase.onStart(), which also runs in the background
+    // process once the app is a background application (v1b). A background
+    // process cannot be relied on to write storage, so it must never be the
+    // thing that runs a migration.
+    //
+    // Wipe-on-mismatch is acceptable only while the store holds nothing that
+    // cannot be refetched. Before v2 stores a day's dose, this must become a
+    // real migration.
     // Schema 1. The literal rather than a class const: a const declared in a
     // class body is not something a static method is guaranteed to see, and
     // this is not worth a compile cycle to find out. Bump both numbers
@@ -94,9 +106,9 @@ class UvState {
         longitude     = UvNum.asFloat(Application.Storage.getValue(KEY_LON));
         watchAltitude = UvNum.asFloat(Application.Storage.getValue(KEY_ALT));
 
-        if (latitude != null && longitude != null) {
-            fixSource = FIX_CACHED;
-        }
+        // A restored position is where the last fetch was made, not a fix read
+        // in this run, so fixSource stays FIX_NONE until one is. The
+        // diagnostics page says so rather than calling it "cached".
 
         forecast.load();
     }
@@ -127,8 +139,7 @@ class UvState {
         return UvCorrection.effective(raw,
                                       watchAltitude,
                                       forecast.gridElevation,
-                                      UvSettings.albedo(),
-                                      UvSettings.fraction());
+                                      UvSettings.increment());
     }
 
     public function cacheState() as Number {

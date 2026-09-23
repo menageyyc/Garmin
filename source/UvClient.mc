@@ -1,7 +1,6 @@
 import Toybox.Lang;
 import Toybox.Communications;
 import Toybox.Position;
-import Toybox.Activity;
 import Toybox.System;
 import Toybox.Time;
 import Toybox.Timer;
@@ -20,6 +19,11 @@ import Toybox.Timer;
 // daylight position, a top-level elevation field that varies correctly by
 // location, and a unixtime series aligned to UTC, confirmed by catching the
 // hour index advance across an hour boundary. None of that needs re-testing.
+//
+// One thing those tests could NOT show: both sites were flat, so they could
+// not tell a point terrain height from a grid-cell mean. The 2026-09-23 review
+// found the default is the point height; the request now asks for the cell's
+// own height with elevation=nan. That part does need testing - see STATE.md.
 //
 // timeformat=unixtime keeps the payload small. ISO timestamps roughly double
 // the size of the time array for no benefit on-device. Payload size is the
@@ -46,54 +50,37 @@ class UvClient {
     private var _gpsTimer as Timer.Timer or Null = null;
     private var _gpsActive as Boolean = false;
 
+    // Set by cancel(). If LOCATION_DISABLE does not withdraw a pending one-shot,
+    // a late onPosition on a superseded client would otherwise start a second
+    // web request (2026-09-23 review, finding 10).
+    private var _cancelled as Boolean = false;
+
+    // Ask Open-Meteo for the grid cell's own height rather than the terrain
+    // height at our coordinates. See requestUv(). Dropped for the rest of this
+    // client's life if the endpoint refuses it.
+    private var _cellElevation as Boolean = true;
+
     function initialize(onDone as Method(success as Boolean) as Void) {
         _onDone = onDone;
     }
 
     // Resolve a position, then fetch. Tries the free cached fix first and only
-    // powers up the GPS if there is nothing usable.
+    // powers up the GPS if there is nothing usable - which now includes a
+    // cached fix known to be more than an hour old. See UvSense.
     public function start() as Void {
         var state = UvState.get();
         state.requestInFlight = true;
         state.clearError();
 
-        readAltitude();
+        UvSense.sampleAltitude();
 
-        var info = Position.getInfo();
-        var cached = (info != null) ? info.position : null;
-        var gpsAltitude = (info != null) ? info.altitude : null;
-        var quality = (info != null) ? info.accuracy : null;
-
-        if (cached != null) {
-            var deg = cached.toDegrees();
-            // A cached fix at exactly 0,0 means "never had one", not Null Island.
-            if (!(deg[0] == 0.0 && deg[1] == 0.0)) {
-                // Into Float locals first: .format() on a Float is a pattern
-                // this file already proves compiles, whereas formatting the
-                // array element directly is not worth the risk of a cycle.
-                var latf = deg[0].toFloat();
-                var lonf = deg[1].toFloat();
-                state.latitude = latf;
-                state.longitude = lonf;
-                state.fixSource = FIX_CACHED;
-
-                // The barometer is the better source and readAltitude() has
-                // already tried it. If it gave nothing, the cached fix carries a
-                // GPS altitude worth falling back to.
-                if (state.watchAltitude == null && gpsAltitude != null) {
-                    state.watchAltitude = gpsAltitude.toFloat();
-                }
-
-                System.println("GPS cached " + latf.format("%.4f") + ","
-                               + lonf.format("%.4f")
-                               + " quality=" + qualityText(quality));
-                requestUv();
-                return;
-            }
+        if (UvSense.sampleCachedFix()) {
+            requestUv();
+            return;
         }
 
-        // Nothing cached. Acquire one, which costs battery and can take a while
-        // outdoors and may never succeed indoors.
+        // Nothing usable cached. Acquire one, which costs battery and can take
+        // a while outdoors and may never succeed indoors.
         System.println("No usable cached fix; acquiring one-shot GPS");
         _gpsActive = true;
         Position.enableLocationEvents(
@@ -104,6 +91,9 @@ class UvClient {
     }
 
     public function onPosition(info as Position.Info) as Void {
+        if (_cancelled) {
+            return;
+        }
         cancelGpsTimer();
         stopGps();
 
@@ -116,22 +106,22 @@ class UvClient {
         }
 
         var deg = fix.toDegrees();
+        var latf = deg[0].toFloat();
+        var lonf = deg[1].toFloat();
 
-        // The same 0,0 guard the cached path has always had. Without it a
-        // callback carrying "no fix yet" sends the app to Null Island, and
-        // Open-Meteo answers with a perfectly plausible tropical UV over
-        // HTTP 200 - a success that proves nothing and hides a broken position
-        // path.
-        if (deg[0] == 0.0 && deg[1] == 0.0) {
-            fail(null, "GPS returned 0,0");
+        // The same guard the cached path has. Without it a callback carrying
+        // "no fix yet" sends the app to Null Island, and Open-Meteo answers
+        // with a perfectly plausible tropical UV over HTTP 200 - a success
+        // that proves nothing and hides a broken position path.
+        if (!UvSense.plausible(latf, lonf)) {
+            fail(null, "GPS gave no real fix");
             return;
         }
 
-        var latf = deg[0].toFloat();
-        var lonf = deg[1].toFloat();
         state.latitude = latf;
         state.longitude = lonf;
         state.fixSource = FIX_LIVE;
+        state.fixAgeSeconds = 0;
 
         // GPS altitude as a fallback if the barometer gave us nothing.
         var gpsAltitude = info.altitude;
@@ -142,33 +132,14 @@ class UvClient {
         // Quality is logged, not gated on. A last-known or poor fix is still
         // fine for a 40 km UV grid cell, and refusing one would block the
         // simulator test for no safety gain - every fetch there reports
-        // LAST_KNOWN. 0,0 is the case that actually misleads, and it is
-        // caught above.
+        // LAST_KNOWN. 0,0 and out-of-range values are what actually mislead,
+        // and they are caught above. Age is checked on the cached path, in
+        // UvSense; a live fix is new by definition.
         System.println("GPS live " + latf.format("%.4f") + ","
                        + lonf.format("%.4f")
                        + " quality=" + qualityText(info.accuracy));
 
         requestUv();
-    }
-
-    // Barometric altitude, which beats GPS altitude by a wide margin. Available
-    // outside an activity on most fenix and epix hardware, but guard it: the
-    // call can return null, and on devices without a barometer it always will.
-    //
-    // In the simulator this returns a fixed -18 m regardless of the simulated
-    // position. It is not derived from anything - it read identically at
-    // Olathe and at Bangkok - so the "vs grid" figure there is correct
-    // arithmetic over a fake input. Use FIT playback for a realistic value.
-    private function readAltitude() as Void {
-        var state = UvState.get();
-        var activityInfo = Activity.getActivityInfo();
-        var altitude = (activityInfo != null) ? activityInfo.altitude : null;
-        if (altitude != null) {
-            state.watchAltitude = altitude.toFloat();
-            System.println("Baro altitude " + altitude.format("%.0f") + " m");
-        } else {
-            System.println("No barometric altitude available");
-        }
     }
 
     private function startGpsTimer() as Void {
@@ -199,6 +170,7 @@ class UvClient {
     // reference would risk the client being collected while a callback is
     // still registered against it.
     public function cancel() as Void {
+        _cancelled = true;
         cancelGpsTimer();
         stopGps();
     }
@@ -235,6 +207,18 @@ class UvClient {
             "timeformat"    => "unixtime"
         };
 
+        // By default Open-Meteo's "elevation" is the height of a 90 m terrain
+        // model at our exact coordinates. On a piste that matches the
+        // barometer, the delta is about zero, and the altitude correction
+        // vanishes exactly where it matters. elevation=nan is documented to
+        // return the grid cell's own height instead - the height CAMS itself
+        // corrected for, and so the right baseline. (2026-09-23 review,
+        // finding 1. Open-Meteo issue #1155 reported nan returning the wrong
+        // height in Dec 2024; the simulator test in STATE.md checks it.)
+        if (_cellElevation) {
+            params.put("elevation", "nan");
+        }
+
         var options = {
             :method       => Communications.HTTP_REQUEST_METHOD_GET,
             :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
@@ -242,12 +226,28 @@ class UvClient {
 
         System.println("GET " + BASE_URL + " lat=" + lat.format("%.4f")
                        + " lon=" + lon.format("%.4f")
-                       + " days=" + FORECAST_DAYS);
+                       + " days=" + FORECAST_DAYS
+                       + " elev=" + (_cellElevation ? "nan" : "default"));
         Communications.makeWebRequest(BASE_URL, params, options, method(:onResponse));
     }
 
     public function onResponse(code as Number, data as Dictionary or String or Null) as Void {
         var state = UvState.get();
+
+        // If the endpoint refuses elevation=nan, drop it and ask again once.
+        // Two ways that could show: an HTTP 400, or a body the watch's JSON
+        // parser rejects (-400) - JSON has no NaN, so an "elevation": NaN
+        // echoed back would fail to parse. A refused parameter must not cost
+        // the wearer a reading: without it the altitude correction reads about
+        // zero on a hill, which is an under-report, the safe direction.
+        if (_cellElevation && (code == 400
+                               || code == Communications.INVALID_HTTP_BODY_IN_NETWORK_RESPONSE)) {
+            _cellElevation = false;
+            System.println("Code " + code.toString() + " with elevation=nan; retrying without it");
+            requestUv();
+            return;
+        }
+
         state.httpCode = code;
 
         if (code != 200) {
@@ -281,13 +281,15 @@ class UvClient {
             return;
         }
 
-        // The API reports the elevation of the grid cell it answered for, and
-        // that is the baseline the altitude correction works against. Assigned
+        // With elevation=nan the API reports the height of the grid cell it
+        // answered for, and that is the baseline the altitude correction works
+        // against. Without it, the number is the terrain height at our
+        // coordinates - see requestUv(). Assigned
         // only after ingest has accepted the series: setting it first would
         // leave a refused fetch pairing the new cell's elevation with the old
         // cell's series, which is a quietly wrong number rather than an error.
         // A response with no elevation field is still usable - it corrects for
-        // albedo alone and the screen says "no grid".
+        // the surface alone and the screen says "no grid".
         var elevation = UvNum.asFloat(data.get("elevation"));
         forecast.gridElevation = elevation;
 
@@ -307,14 +309,17 @@ class UvClient {
         }
 
         var raw = state.rawNow();
+        var hour = forecast.stepValueAt(now);
         var eff = state.effectiveNow();
         System.println("UV OK raw=" + (raw == null ? "none" : raw.format("%.2f"))
+                       + " hr=" + (hour == null ? "none" : hour.format("%.2f"))
                        + " eff=" + (eff == null ? "none" : eff.format("%.2f"))
                        + " gridElev=" + (elevation == null ? "ABSENT" : elevation.format("%.0f") + " m")
+                       + (_cellElevation ? " (cell)" : " (point)")
                        + " idx=" + idx.toString() + "/" + forecast.hourCount().toString()
                        + " " + slotText
                        + " alt=" + UvCorrection.altitudePercent(state.watchAltitude, elevation).toString() + "%"
-                       + " albedo=" + UvCorrection.albedoPercent(UvSettings.albedo(), UvSettings.fraction()).toString() + "%");
+                       + " surface=" + UvCorrection.surfacePercent(UvSettings.increment()).toString() + "%");
 
         _onDone.invoke(true);
     }
