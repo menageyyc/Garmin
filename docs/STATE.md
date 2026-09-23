@@ -22,8 +22,11 @@ item was an unreachable null test in `UvSense.mc`, removed (**that one-line
 change is not yet compiled**; the next build confirms it). Question 25's figures
 are confirmed on screen.
 
-**v1b IS WRITTEN; its first build gave 8 errors from one cause, fixed, NOT
-YET RECOMPILED** (2026-09-23, same session). Matt decided
+**v1b BUILDS AND RUNS** (2026-09-23, same session). The background service
+fetched, measured a new cell, and delivered to the app; **background memory
+budget measured: 59 kB, peak use 13 kB.** Two items still open: question 16
+(delivery to the glance - the step-4 attempt never ran the service) and the
+optional UV grid test (the `hr=` at `51.300, -115.450` still to be read). Matt decided
 the four design questions: refresh every 3 h, the background fetches a new
 cell's height itself, data returns through `Background.exit()`, and
 `uv_index_clear_sky` is fetched, stored and shown on the reading page.
@@ -190,7 +193,7 @@ Question 25's figures are on screen.
 | 4 | Sun detection method | v2 design | **Answered: activity + manual session** |
 | 5 | Store-published or sideload-only | Review, health wording, licence | Open |
 | 6 | Which API level group does epix Pro sit under? | Target API level | **Answered: API 5.2. SDK 9.2.0 installed** |
-| 7 | App + glance + background memory budgets, from local SDK | Architecture limits | **Partly answered:** glance ~59.9 kB, app 763.6 kB (both measured). **Background still unread** - v1b's `BG UV OK` console line prints `mem=used/total` for it ("Testing v1b" step 3) |
+| 7 | App + glance + background memory budgets, from local SDK | Architecture limits | **ANSWERED 2026-09-23:** app 763.6 kB, glance ~59.9 kB, **background 59 kB** (v1b's `BG UV OK` line: `mem=13/59 kB`, with the parsed 48-hour UV and clear-sky series held). Not the 32 kB commonly quoted. The `forecast_days=1` fallback is not needed |
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | **Answered: `epix2pro47mm` is correct - compiler accepted it** |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
@@ -1656,3 +1659,58 @@ compound null test before arithmetic is split.
 - Nothing else was reported, which means the scope annotations -
   `(:background :glance)` on the app class, `Toybox has :Activity` in the
   glance, the `instanceof` narrowing - passed the checker. **Not yet run**
+
+### 2026-09-23 - v1b RUNS. Background budget 59 kB
+- The fix built clean. Matt ran "Testing v1b". Console, in order:
+
+```
+Background: BG GET https://air-quality-api.open-meteo.com/v1/air-quality lat=51.0450 lon=-114.0700
+Background: BG UV OK cell=51.20,-114.00 height=pending mem=13/59 kB
+Background: BG GET https://api.open-meteo.com/v1/elevation cell=51.20,-114.00
+Background: BG cell height 1101 m
+BG delivered: 48 h, cell 51.20,-114.00 height 1101 m clear yes
+UV OK raw=1.33 hr=1.15 eff=1.33 clr=1.38 cell=51.20,-115.60 resp=51.10,-115.80 cellElev=pending pointElev=1687 m idx=16/48 slot+646s alt=0% surface=0%
+Cell height 2060 m from 49/49 points, cell=51.20,-115.60 alt=-15%
+UV OK raw=1.33 hr=1.15 eff=1.18 clr=1.50 cell=51.20,-114.00 resp=51.00,-114.10 cellElev=1101 m pointElev=1061 m idx=16/48 slot+715s alt=-11% surface=0%
+Background: BG UV OK cell=51.20,-114.00 height=1101 m mem=13/59 kB
+BG delivered: 48 h, cell 51.20,-114.00 height 1101 m clear yes
+UV OK raw=1.42 hr=1.15 eff=1.21 clr=1.47 cell=51.20,-115.60 resp=51.10,-115.80 cellElev=2060 m pointElev=1687 m idx=16/48 slot+964s alt=-15% surface=0%
+```
+
+**Confirmed working**
+- **The background service runs, fetches, and delivers to the app.**
+  `Background:` is the simulator's own prefix for the service's output
+- **Background memory: 59 kB budget, 13 kB used** with both 48-hour series
+  parsed and held. Question 7 is closed. About 4.5x headroom
+- **The background's new-cell path ran after all.** The previous entry said
+  ordinary simulator steps could not reach it. The new cell-memory format
+  started empty, so the first run met Calgary as unmeasured, fetched its
+  height itself (1,101 m, same as the foreground measures) and delivered it
+- **Its cached-cell path ran too:** the second run had `height=1101 m`
+  straight away and made no elevation request
+- **`receiveBackground` remembered the cell:** the foreground's next Calgary
+  fetch showed `cellElev=1101 m` with no request - a height the background
+  measured, used by the app
+- **Clear-sky is fetched and delivered** (`clr=`, `clear yes`). All `clr`
+  values were within 0.2 of `raw`, a near-clear forecast, so the reading
+  page's "if sky clears" line was correctly absent. Its appearing is still
+  unseen
+- `eff=1.18` at Calgary is `1.33 x 0.888` (the -11.2% altitude term);
+  `eff=1.21` at Sunshine is `1.42 x 0.85`. Arithmetic right
+- Sunshine's first fetch re-measured its cell (2,060 m again), as predicted
+  for the format change; its later fetch did not
+
+**Not yet shown**
+- **Question 16 (delivery to the glance):** Matt's step-4 console shows only
+  `Baro altitude` / `GPS cached`, which only the app view prints, and **no
+  `Background:` line at all**. So the service did not run in that attempt;
+  it is not evidence either way about glance delivery. Needs a retry
+- **Step 5 (the UV grid):** the `51.300, -115.450` fetch gave `resp=51.30`
+  (a different 0.1 degree cell, as intended), but its `hr=` has not been
+  read. Note Calgary also read `hr=1.15` at idx 16, so a matching `hr`
+  alone is weak evidence at this hour; `raw` at a similar `slot` gives the
+  next hour too, which makes the comparison stronger
+- **Unexplained, harmless:** the first background run appears before the
+  app's own first `onShow` lines. Either Matt triggered it at once, or a
+  first registration of a 3-hour event fires immediately. Worth knowing for
+  the watch, not a fault either way
