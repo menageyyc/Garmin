@@ -13,8 +13,11 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 **v0 AND v1a ARE BOTH COMPLETE AND CONFIRMED RUNNING** in the simulator on
 2026-09-22.
 
-**UPDATED 2026-09-23: v1c IS WRITTEN AND PUSHED, NOT YET COMPILED.** Next is
-Matt's build of v1c plus the elevation test, then v1b. See "Current phase" below and the 2026-09-23 session log entry. The
+**UPDATED 2026-09-23 (end of session): v1c BUILDS CLEAN AND RUNS.** But the
+elevation test found that `elevation=nan` makes the air-quality endpoint return
+NO elevation (`gridElev=ABSENT`), so the altitude correction currently has no
+baseline and reads 0% everywhere. **Resolving that is the first job of the next
+session**, before v1b. See the last session log entry. See "Current phase" below and the 2026-09-23 session log entry. The
 order is no longer optional: the review showed v1a's position, altitude and
 freshness logic is what v1b would be built on, and it is wrong.
 
@@ -146,10 +149,11 @@ two session log entries). v1b waits for v1c, because findings 3, 4, 7 and 10
 change what v1b is built on.
 
 Next action, in order:
-1. **Matt, optional, BEFORE pulling:** elevation test part A on the v1a build
-2. **Matt: pull, build v1c, report the compile result**
-3. **Matt: elevation test part B** on the v1c build
-4. **Matt: one open decision** - how the corrected number is printed (22)
+1. **Decide how the app gets a grid-cell height** (question 19, and the
+   options in the last session log entry). Nothing else in v1 matters as much:
+   without it the headline altitude correction is off
+2. Clarify question 25 with Matt in plain terms (he found it unclear)
+3. Then v1b
 
 ---
 
@@ -175,12 +179,12 @@ Next action, in order:
 | 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
-| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | Open - simulator test, part A needs no code change |
+| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Half answered 2026-09-23: `elevation=nan` returns NO elevation field** on this endpoint (HTTP 200, `gridElev=ABSENT`, both Sunshine positions). Part A (what the default returns in relief) was skipped, so the default's meaning is still inferred from the docs, not tested. **Open: where the cell height comes from instead** |
 | 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | **Answered 2026-09-23: dropped** |
 | 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
-| 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | Open - Matt's call. v1c keeps one decimal until decided |
+| 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | **Answered 2026-09-23: one decimal.** Already what v1c does |
 | 23 | Situational surface: expire back to grass at local midnight, or after ~12 h? | v1c | **Answered 2026-09-23: local midnight** |
-| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | Open - Matt's call, low priority: none is the ski case |
+| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | Open, low priority. **Matt found this unclear as asked - re-explain it in plain terms next session** before asking for a decision. The plain version: should sand/concrete/water stay at their v1a figures, or be cut the way snow was, given the same physics argument applies? |
 | 24 | Which model does the v2 dose-integrator review pass? | v2 review | Open. Matt moved the project to Opus 5.5 on 2026-09-23 and is inclined to use Opus 5.5 at medium effort rather than Fable 5.1, on published benchmarks. Not yet decided |
 
 ---
@@ -1062,3 +1066,45 @@ sessions did. Pushed there as a fast-forward.
   simulator once before. The console line `Cached fix too old` names it.
 - Sand (+9%) now exceeds old snow (+7.5%). Deliberate for now; question 25.
 - Build plan updated for the three decisions.
+
+### 2026-09-23 - v1c compiled and ran. The elevation test found a hole
+- **Build successful** on the first compile. `Position.Info.when`,
+  `Time.today()`, `Dictionary.put` and `UvSense` all passed the strict checker.
+- **Part A skipped** (optional). **Part B results**, both Sunshine positions:
+
+```
+UV OK raw=0.00 hr=0.00 eff=0.00 gridElev=ABSENT (cell) idx=3/48 slot+1545s alt=0% surface=1%
+UV OK raw=0.00 hr=0.00 eff=0.00 gridElev=ABSENT (cell) idx=3/48 slot+1607s alt=0% surface=1%
+```
+
+- **What that proves:** `(cell)` means `elevation=nan` was sent and accepted:
+  HTTP 200, the body parsed, no retry. But the response carries **no usable
+  `elevation`** - absent, or null. So on this endpoint `elevation=nan` does
+  not return the grid-cell height the forecast API documents. The altitude
+  correction is therefore **off everywhere** in v1c (`alt=0%`, diagnostics
+  "no grid"). That is an under-report, the safe direction, and on a hill v1a
+  was probably no better (finding 1) - but the headline feature does nothing.
+- **What it does not prove:** UV was 0.00 because idx 3 is 03:00 UTC, night
+  in Alberta, so the series itself was untested at those positions. The fix
+  age was not reported; the fetches succeeded without a GPS timeout, so the
+  60-minute gate did not block the simulator.
+- `hr=` equals `raw=` at night as expected (both zero); interpolation is not
+  yet seen working on a non-zero series. A daylight position will show it.
+- **Question 22 answered: one decimal** (no code change - v1c already does).
+- **Options for the cell height, for the next session to weigh:**
+  1. **Drop `elevation=nan`, return to the default.** Honest only if the
+     screen then says the altitude correction is unavailable in relief,
+     because the default is (per the docs) the point terrain height, which
+     cancels against the barometer on a hill
+  2. **Compute the cell mean ourselves** from Open-Meteo's Elevation API
+     (`api.open-meteo.com/v1/elevation`, a 90 m DEM, many coordinates per
+     request): sample a grid of points across the CAMS cell and average. One
+     extra request per cell, cacheable indefinitely because terrain does not
+     change. Needs the CAMS global grid spacing and cell boundaries checked
+     (~0.4 deg, ~45 km) and the free-tier terms for that endpoint checked
+  3. **Find another field or endpoint** that exposes the CAMS model
+     orography directly. Unresearched
+  - Also worth running part A after all, on a build without `nan`, to test
+    rather than infer what the default returns in relief
+- `update.bat` branch: pushed to `claude/garmin-uv-tracking-app-7y6gk6`
+  (fast-forward) and to the session branch `claude/fable-results-review-nb6cd3`.
