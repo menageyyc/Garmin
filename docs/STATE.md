@@ -13,21 +13,22 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 **v0 AND v1a ARE BOTH COMPLETE AND CONFIRMED RUNNING** in the simulator on
 2026-09-22.
 
-**Two things can happen next, and they are independent:**
+**UPDATED 2026-09-23: the cold review is done and verified. Next is v1c, then
+v1b.** See "Current phase" below and the 2026-09-23 session log entry. The
+order is no longer optional: the review showed v1a's position, altitude and
+freshness logic is what v1b would be built on, and it is wrong.
 
-1. **A cold review of v1a**, by a model that did not write it. The brief is
-   `docs/REVIEW-BRIEF-v1a.md` and it stands on its own - it does not require
-   reading this file first. Agreed for Claude Fable 5.1, whose brief is
-   deliberately written less prescriptively than this repo's house style,
-   because Anthropic's migration guidance says prompts written for prior models
-   are often too prescriptive on Fable and reduce output quality.
-2. **v1b** - the background service, the 30-minute cached refresh, and the
-   glance rewrite. **Read the 2026-09-22 session log entry on the background
+1. **v1c** - the correction pass from `docs/REVIEW-v1a-findings.md`. Blocked
+   on the elevation test (part A) and four decisions from Matt.
+2. **v1b** - the background service, the cached refresh, and the glance
+   rewrite. **Read the 2026-09-22 session log entry on the background
    architecture before starting it.** Three platform facts established that day
    contradict the build plan's original architecture diagram: a background
    service cannot write storage, `onBackgroundData()` fires in the glance too,
    and GPS from a background process is unreliable. The build plan has been
-   corrected; the diagram in it is now right.
+   corrected; the diagram in it is now right. **The diagram's "every 30 min"
+   is now also wrong** (CAMS updates twice a day - review finding 7) and is to
+   be corrected when v1b is designed.
 
 **What v1a proved, live:** three pages with a page indicator, on-watch settings
 pickers, `HTTP 200`, `idx 15/48` (so `forecast_days=2` took), correct grid
@@ -139,8 +140,18 @@ decides it), CAMS already applies a snow albedo so the app's +42% double
 counts, position and altitude are only sampled when a fetch starts so the
 distance check can never fire, and a real watch's cached fix is of unknown age.
 
-Next action: work the review's "Suggested order", then **v1b** - the background
-service, cached refresh and glance.
+**2026-09-23: the review has been verified** (see that day's session log).
+Every code-path claim was re-traced and holds; the Open-Meteo and CAMS claims
+were re-checked against sources and hold, with one minor discrepancy noted.
+**Next phase is v1c** - a correction pass on v1a - and **v1b waits for it**,
+because findings 3, 4, 7 and 10 change what v1b is built on.
+
+Next action, in order:
+1. **Matt: the elevation test, part A** (current build, no code change) -
+   see the 2026-09-23 log entry for the exact steps
+2. **Matt: four design decisions** (listed in the same entry) - Surroundings,
+   the snow figures, how the corrected number is printed, surface expiry
+3. Claude writes v1c as one bundled change, so it costs one compile loop
 
 ---
 
@@ -166,6 +177,12 @@ service, cached refresh and glance.
 | 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
+| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | Open - simulator test, part A needs no code change |
+| 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | Open - Matt's call. Review recommends drop |
+| 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | Open - Matt's call |
+| 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | Open - Matt's call |
+| 23 | Situational surface: expire back to grass at local midnight, or after ~12 h? | v1c | Open - Matt's call |
+| 24 | Which model does the v2 dose-integrator review pass? | v2 review | Open. Matt moved the project to Opus 5.5 on 2026-09-23 and is inclined to use Opus 5.5 at medium effort rather than Fable 5.1, on published benchmarks. Not yet decided |
 
 ---
 
@@ -923,3 +940,81 @@ answer for this hour, and it never fired.
 - Constants (k_alt, albedo table, water, clamps, uncapped output) judged inside
   the noise of the above; verdicts recorded in the review.
 - No code changed. Findings, not a rewrite, as the brief asked.
+
+### 2026-09-23 - Review verified. v1c defined; v1b waits for it
+- Project moved from Fable 5.1 to **Opus 5.5** for this phase, on Matt's
+  reading of published benchmarks. Which model does the v2 dose-integrator
+  review is left open (question 24).
+- Read the review, the brief, this file, TOOLCHAIN.md, the whole build plan
+  and all twelve source files before judging anything. **Nothing compiled;
+  no code changed.**
+
+**What was re-checked, and the verdict**
+
+| Finding | Check | Verdict |
+|---|---|---|
+| 1 `elevation` is the 90 m DEM height at your coordinates, not the cell mean | Open-Meteo documents it: default is Copernicus GLO-90 at the point, used for downscaling; `elevation=nan` disables downscaling and uses the grid-cell height. The air-quality API accepts `elevation` and `cell_selection` too. Issue #1155 (elevation=nan returning the wrong number) is real; its fix status could not be confirmed from here | **Holds. Needs the simulator test** - Olathe and Bangkok are flat, so v0 could not tell the two apart |
+| 1, extra | The CAMS UV method uses **altitude as an input** to its snow regressions, i.e. CAMS already applies an altitude effect at its own model terrain height | Strengthens finding 1: the correct baseline is the cell height CAMS used, which is what `elevation=nan` is supposed to return |
+| 2 CAMS already models snow albedo | CAMS UV methodology: regional snow albedo when model snow depth > 0.02 m; four regressions split on old/fresh and solar zenith above/below 65 deg | **Holds.** One discrepancy: the CAMS document says "fresh" means snow water content rose **within the last 24 h**; the review says four days. Does not change any decision |
+| 3 Position and altitude only sampled when a fetch starts | Re-traced. `UvState.latitude/longitude/watchAltitude` are written only in `UvClient.start()` and `onPosition()`; `load()` restores the last fetch's values; `ingest()` copies them into `forecast.lat/lon`. So `distanceKm` is 0 after every successful fetch, also across app restarts | **Holds exactly as stated** |
+| 4 Cached fix age never read | `Position.Info.when` exists in the API docs; `UvClient` never reads it. `QUALITY_LAST_KNOWN` whenever GPS is off is documented | **Holds.** How often it bites is a wrist test |
+| 5 Hourly values instantaneous; step read | Code reads `values[idx]` for the whole hour | **Holds** |
+| 6 Surroundings only scales the reflected term | `UvCorrection.albedoFactor` multiplies `albedo * openness`; direct and sky terms untouched | **Holds.** "Enclosed" + grass reads "no correction" |
+| 7 CAMS updates twice a day | Open-Meteo: CAMS updated twice daily; global ~45 km, Europe 11 km | **Holds.** v1b's 30-minute refresh is wasted |
+| 8 Sticky settings; default word hidden | Code re-read | **Holds** |
+| 10 `migrate()` in `onStart()` | `onStart` runs in every process once the app is a background app | **Holds.** Must move before v1b |
+
+**v1c - what it contains**
+
+No-decision items (findings 3, 4, 5, 10, and 10's `_cancelled` flag):
+- Read position (range-guarded, fix age checked) and barometric altitude on
+  every `onShow()`, before judging freshness
+- Treat a cached fix older than ~60 min as unusable; fall through to the
+  existing one-shot GPS with its 45 s timeout. Show fix age on diagnostics
+- Range guard: reject |lat| > 90 or |lon| > 180, alongside the 0,0 guard
+- Interpolate between hours in `valueAt()`, falling back to the step value
+  at a gap or at the end of the series
+- Move `migrate()` out of `onStart()` into `getInitialView()` /
+  `getGlanceView()`
+- EXPIRED draws the number grey
+- `FRESH_SECONDS` 2 h -> ~6 h; distance thresholds unchanged (they now work)
+- Add `elevation=nan` to the request **if** test part B shows it returns a
+  shared cell value
+
+Decision items (questions 20-23), all Matt's:
+- **Surroundings** - drop it (review recommends: shade belongs in v2 as a
+  dose pause) or rework it to scale total UV with wide, honest labels
+- **Snow** - replace 0.85/0.50 x openness with an increment over CAMS of
+  roughly +15-20% fresh and +5-10% old, printed as approximate
+- **Corrected number** - one decimal, whole number, or a range. The API
+  figure stays at one decimal either way
+- **Surface expiry** - back to grass at local midnight, or after ~12 h. The
+  surface word always shows; the percentage only at 2% or more
+
+**The elevation test - exact steps for Matt**
+
+Part A runs on the **current** build. No pull needed.
+1. Simulator: **Settings -> Set Position** -> `51.115, -115.763` (Sunshine
+   Village base, about 1,660 m). Press START. In the **Debug Console**, copy
+   the line starting `UV OK` - the number after `gridElev=`
+2. Set Position -> `51.078, -115.779` (Sunshine Village, about 2,160 m,
+   4 km away). START. Copy the `UV OK` line again
+3. **Read it:** two different `gridElev` values, each close to the real
+   height, means the field is the point terrain height and finding 1 is
+   confirmed. The same value both times means it is already the cell mean and
+   the altitude correction works as designed
+
+Part B needs a build with `elevation=nan`; Claude pushes it after part A. Same
+two positions. One shared value, well below 2,160 m, is the cell height and
+becomes the correction's baseline. Anything else is issue #1155, and the
+fallback is to say on screen that the altitude correction is unavailable
+rather than print "+0%".
+
+**Branch note.** This session was assigned
+`claude/fable-results-review-nb6cd3`. The review itself was on
+`claude/trusting-ride-13tzxx`. Matt's clone tracks
+`claude/garmin-uv-tracking-app-7y6gk6`, so **neither reaches `update.bat`**
+until it is merged into that branch. Matt to decide how.
+
+- Build plan not yet edited: no decision has changed yet. It gets updated
+  when the four decisions are made.
