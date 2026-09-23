@@ -53,17 +53,40 @@ module UvSettings {
     // which counted the same effect CAMS had already counted. Measured
     // clear-sky snow enhancement of the whole index is only 15-25%.
     //
-    // The other four are v1a's figures with openness fixed at "open" (0.5 x
-    // albedo), unchanged by the review. Sand therefore sits above old snow.
-    // That is not a typo: CAMS does not model sand, so sand carries its whole
-    // effect while old snow carries only the residual. Open question 25.
+    // The other four (settled 2026-09-23, question 25, option B) follow the
+    // same physics. The index rises with the UV brightness of the whole region
+    // - the ground 10-20 km around, and further - through ground-atmosphere
+    // multiple reflection, not with the patch underfoot. KNMI's operational
+    // UV service (TEMIS) models it as
+    //
+    //   f(A) = (1 - 0.25 * A_ref) / (1 - 0.25 * A)
+    //
+    // with A the regional UV albedo and A_ref what the model already assumed,
+    // taken as 0.05 (the snow-free value used for the UV index from ERA5).
+    // The same formula gives +13-20% for snow at regional albedo 0.5-0.7,
+    // matching the measured 15-25%, and +17-19% at the Salar de Uyuni against
+    // +20% measured - so it holds across the range.
+    //
+    // Published erythemal albedos, and what they give:
+    //   grass 0.01-0.04      -> -0.9 to -0.3%  -> 0 (not a reduction: CAMS's
+    //                                              own snow-free value is
+    //                                              not pinned down that well)
+    //   water 0.05-0.10      ->  0 to +1.3%    -> +1%
+    //   concrete 0.10-0.20   -> +1.3 to +4.0%  -> +2% (urban includes asphalt)
+    //   dry sand 0.10-0.25   -> +1.3 to +5.3%  -> +3% (WHO's 0.15, rounded up)
+    //
+    // These assume you are surrounded by the surface for kilometres, so they
+    // are upper limits: a strip of beach adds less. Sand and concrete are the
+    // same within the measurement spread. v1a's albedo x 0.5 (sand +9%,
+    // concrete +5%, water +3.5%, grass +1.5%) overstated all four, as it had
+    // snow. Sources are in docs/STATE.md.
     function surfaceIncrement(index as Number) as Float {
-        if (index == 1) { return 0.05; }    // concrete, 0.10 albedo
-        if (index == 2) { return 0.035; }   // water, 0.07 albedo
-        if (index == 3) { return 0.09; }    // dry sand, 0.18 albedo
+        if (index == 1) { return 0.02; }    // concrete or urban
+        if (index == 2) { return 0.01; }    // water
+        if (index == 3) { return 0.03; }    // dry sand
         if (index == 4) { return 0.075; }   // old snow, residual over CAMS
         if (index == 5) { return 0.175; }   // fresh snow, residual over CAMS
-        return 0.015;                       // grass, 0.03 albedo
+        return 0.0;                         // grass or ground
     }
 
     function surfaceName(index as Number) as String {
@@ -75,10 +98,15 @@ module UvSettings {
         return "Grass";
     }
 
-    // toNumber() before toString(). Handing "%d" to a Float's format() is not
-    // a conversion the runtime promises anything about.
+    // The menu sub-label. Rounded through UvCorrection, the same as every
+    // other percentage on screen, so the menu and the reading page cannot
+    // disagree. Grass adds nothing, and "about +0%" reads like a fault.
     function surfaceDetail(index as Number) as String {
-        return "about +" + (surfaceIncrement(index) * 100.0).toNumber().toString() + "%";
+        var pct = UvCorrection.surfacePercent(surfaceIncrement(index));
+        if (pct == 0) {
+            return "no change";
+        }
+        return "about +" + pct.toString() + "%";
     }
 
     // The surface in force now. A surface other than grass that was set on an

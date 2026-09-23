@@ -69,10 +69,7 @@ module UvCorrection {
     // increment is the surface's own addition to the index, from settings - a
     // figure the wearer chose, not anything measured.
     function surfaceFactor(increment as Float) as Float {
-        var s = increment;
-        if (s < 0.0) { s = 0.0; }
-        if (s > REFLECT_MAX) { s = REFLECT_MAX; }
-        return 1.0 + s;
+        return 1.0 + clampIncrement(increment);
     }
 
     function effective(raw as Float,
@@ -93,10 +90,30 @@ module UvCorrection {
     // see which correction is doing the work rather than being handed a number
     // that differs from every other UV app with no explanation.
     function altitudePercent(watchAltitude as Float or Null, gridElevation as Float or Null) as Number {
-        return ((altitudeFactor(watchAltitude, gridElevation) - 1.0) * 100.0).toNumber();
+        return roundPercent((altitudeFactor(watchAltitude, gridElevation) - 1.0) * 100.0);
     }
 
+    // From the increment directly, not from (factor - 1): 1.0 + 0.02 - 1.0 is
+    // not exactly 0.02 in a 32-bit float, and every step adds a little error.
     function surfacePercent(increment as Float) as Number {
-        return ((surfaceFactor(increment) - 1.0) * 100.0).toNumber();
+        return roundPercent(clampIncrement(increment) * 100.0);
+    }
+
+    function clampIncrement(increment as Float) as Float {
+        var s = increment;
+        if (s < 0.0) { s = 0.0; }
+        if (s > REFLECT_MAX) { s = REFLECT_MAX; }
+        return s;
+    }
+
+    // Nearest whole number, halves away from zero. toNumber() truncates, and
+    // floats sit just below the value they are meant to be: 0.02 * 100 comes
+    // out as 1.9999999, which truncated to "+1%" and then fell under the 2%
+    // display threshold, so a +2% surface was never shown at all.
+    function roundPercent(value as Float) as Number {
+        if (value < 0.0) {
+            return (value - 0.5).toNumber();
+        }
+        return (value + 0.5).toNumber();
     }
 }
