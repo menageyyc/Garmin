@@ -58,8 +58,21 @@ class UvBackground extends System.ServiceDelegate {
 
         System.println("BG GET " + UvFetch.UV_URL + " lat=" + lat.format("%.4f")
                        + " lon=" + lon.format("%.4f"));
-        Communications.makeWebRequest(UvFetch.UV_URL, UvFetch.uvParams(lat, lon),
-                                      UvFetch.jsonOptions(), method(:onUv));
+        // Literals, not helpers - see UvClient.requestUv(). The same values
+        // as the foreground request, from UvFetch.
+        Communications.makeWebRequest(UvFetch.UV_URL,
+            {
+                "latitude"      => lat.format("%.4f"),
+                "longitude"     => lon.format("%.4f"),
+                "hourly"        => UvFetch.HOURLY,
+                "forecast_days" => UvFetch.FORECAST_DAYS,
+                "timeformat"    => "unixtime"
+            },
+            {
+                :method       => Communications.HTTP_REQUEST_METHOD_GET,
+                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+            },
+            method(:onUv));
     }
 
     function onUv(code as Number, data as Dictionary or String or Null) as Void {
@@ -93,8 +106,15 @@ class UvBackground extends System.ServiceDelegate {
         System.println("BG GET " + UvCell.ELEVATION_URL + " cell=" + _cellLat.format("%.2f")
                        + "," + _cellLon.format("%.2f"));
         Communications.makeWebRequest(UvCell.ELEVATION_URL,
-                                      UvCell.heightParams(_cellLat, _cellLon),
-                                      UvFetch.jsonOptions(), method(:onHeight));
+            {
+                "latitude"  => UvCell.latitudes(_cellLat, _cellLon),
+                "longitude" => UvCell.longitudes(_cellLat, _cellLon)
+            },
+            {
+                :method       => Communications.HTTP_REQUEST_METHOD_GET,
+                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+            },
+            method(:onHeight));
     }
 
     // A failed height request still delivers the forecast, without a height:

@@ -174,14 +174,6 @@ module UvCell {
         Application.Storage.setValue(KEY_CELLS, out);
     }
 
-    // The Elevation API request for a cell's 49 points.
-    function heightParams(cellLat as Float, cellLon as Float) as Dictionary {
-        return {
-            "latitude"  => latitudes(cellLat, cellLon),
-            "longitude" => longitudes(cellLat, cellLon)
-        };
-    }
-
     // The two comma-separated lists the Elevation API takes. Built by the same
     // loop in the same order, so the n-th latitude and the n-th longitude are
     // always the same point.

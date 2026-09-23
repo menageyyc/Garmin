@@ -1,8 +1,9 @@
 import Toybox.Lang;
-import Toybox.Communications;
 
-// What the foreground client and the background service share: the request,
-// the parser, and the names of everything passed between processes.
+// What the foreground client and the background service share: the request's
+// values, the parser, and the names of everything passed between processes.
+// The request dictionaries themselves are written out at each call site,
+// because makeWebRequest refused a helper's plain Dictionary return type.
 //
 // v1b (2026-09-23). Before it, the parse lived in UvForecast.ingest(), inside
 // a glance class the background has no business loading. One parser, called
@@ -55,23 +56,6 @@ module UvFetch {
     const P_HEIGHT = "h";       // that cell's mean height; absent if unknown
     const P_ERROR = "e";        // present only when the background failed
     const P_CODE = "k";         // the HTTP code with it, if there was one
-
-    function uvParams(lat as Float, lon as Float) as Dictionary {
-        return {
-            "latitude"      => lat.format("%.4f"),
-            "longitude"     => lon.format("%.4f"),
-            "hourly"        => HOURLY,
-            "forecast_days" => FORECAST_DAYS,
-            "timeformat"    => "unixtime"
-        };
-    }
-
-    function jsonOptions() as Dictionary {
-        return {
-            :method       => Communications.HTTP_REQUEST_METHOD_GET,
-            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
-        };
-    }
 
     // Open-Meteo's hourly block, as the stored series, or a String naming
     // why it was refused.

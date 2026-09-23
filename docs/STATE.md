@@ -22,7 +22,8 @@ item was an unreachable null test in `UvSense.mc`, removed (**that one-line
 change is not yet compiled**; the next build confirms it). Question 25's figures
 are confirmed on screen.
 
-**v1b IS WRITTEN, NOT COMPILED** (2026-09-23, same session). Matt decided
+**v1b IS WRITTEN; its first build gave 8 errors from one cause, fixed, NOT
+YET RECOMPILED** (2026-09-23, same session). Matt decided
 the four design questions: refresh every 3 h, the background fetches a new
 cell's height itself, data returns through `Background.exit()`, and
 `uv_index_clear_sky` is fetched, stored and shown on the reading page.
@@ -1638,3 +1639,20 @@ compound null test before arithmetic is split.
 
 - Build plan updated: the architecture diagram's "every 30 min" and the
   background-storage paragraph
+
+### 2026-09-23 - First v1b build: 8 errors, one cause; 1 warning
+- **8 errors, all "Passing '$.Toybox.Lang.Dictionary' as parameter 2 / 3 of
+  poly type ..."**, at the four `makeWebRequest` calls. v1b moved the request
+  parameters and options into helpers (`UvFetch.uvParams`, `jsonOptions`,
+  `UvCell.heightParams`) returning plain `Dictionary`. The SDK types those
+  parameters precisely, and the checker only infers that precise shape from a
+  literal written at the call site - which is why every earlier build, with
+  inline literals, compiled. Fixed by writing the literals back at each call
+  site; the values still come from `UvFetch` constants. The helpers are gone.
+  Rule added to CLAUDE.md
+- **1 warning:** `UvGlanceView.mc` line 70, unreachable - the same kind as
+  `UvSense`'s: `Activity.getActivityInfo()` is declared never null. Test
+  removed. Rule added to CLAUDE.md
+- Nothing else was reported, which means the scope annotations -
+  `(:background :glance)` on the app class, `Toybox has :Activity` in the
+  glance, the `instanceof` narrowing - passed the checker. **Not yet run**

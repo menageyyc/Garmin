@@ -203,8 +203,24 @@ class UvClient {
         System.println("GET " + UvFetch.UV_URL + " lat=" + lat.format("%.4f")
                        + " lon=" + lon.format("%.4f")
                        + " days=" + UvFetch.FORECAST_DAYS);
-        Communications.makeWebRequest(UvFetch.UV_URL, UvFetch.uvParams(lat, lon),
-                                      UvFetch.jsonOptions(), method(:onResponse));
+        // The two dictionaries are written out here, not returned by a
+        // shared helper: makeWebRequest wants them in the precise typed shape
+        // the checker infers from a literal, and a helper's plain Dictionary
+        // return type was refused (first v1b build, 2026-09-23). UvFetch
+        // still holds every value in them.
+        Communications.makeWebRequest(UvFetch.UV_URL,
+            {
+                "latitude"      => lat.format("%.4f"),
+                "longitude"     => lon.format("%.4f"),
+                "hourly"        => UvFetch.HOURLY,
+                "forecast_days" => UvFetch.FORECAST_DAYS,
+                "timeformat"    => "unixtime"
+            },
+            {
+                :method       => Communications.HTTP_REQUEST_METHOD_GET,
+                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+            },
+            method(:onResponse));
     }
 
     public function onResponse(code as Number, data as Dictionary or String or Null) as Void {
@@ -350,8 +366,17 @@ class UvClient {
 
         System.println("GET " + UvCell.ELEVATION_URL + " cell=" + lat.format("%.2f") + ","
                        + lon.format("%.2f") + " points=" + UvCell.pointCount().toString());
-        Communications.makeWebRequest(UvCell.ELEVATION_URL, UvCell.heightParams(lat, lon),
-                                      UvFetch.jsonOptions(), method(:onCellHeight));
+        // Literals, not helpers - see requestUv().
+        Communications.makeWebRequest(UvCell.ELEVATION_URL,
+            {
+                "latitude"  => UvCell.latitudes(lat, lon),
+                "longitude" => UvCell.longitudes(lat, lon)
+            },
+            {
+                :method       => Communications.HTTP_REQUEST_METHOD_GET,
+                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+            },
+            method(:onCellHeight));
     }
 
     public function onCellHeight(code as Number, data as Dictionary or String or Null) as Void {

@@ -72,6 +72,14 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
   writable name (`as Any` gives "Cannot resolve type"), while strict mode demands
   every parameter be typed. For a function that inspects an unknown value at
   runtime, the resolution is `(:typecheck(false))` on that function alone.
+- **Write `makeWebRequest`'s parameters and options as dictionary literals
+  at the call site.** The checker infers the precise typed shape the API
+  demands from a literal; a helper returning plain `Dictionary` is refused
+  ("Passing '$.Toybox.Lang.Dictionary' as parameter 2 of poly type ...").
+  Share the values (constants), not the dictionary.
+- The SDK declares `Position.getInfo()` and `Activity.getActivityInfo()` as
+  never null. A null test on either is flagged as unreachable code. Test the
+  fields inside (`position`, `altitude`), which can be null.
 - Health-adjacent output is presented as an estimate with a margin, never as a
   precise threshold. MED varies widely within every Fitzpatrick type, and the
   type itself is an unreliable self-report.

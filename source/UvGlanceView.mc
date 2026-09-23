@@ -65,10 +65,9 @@ class UvGlanceView extends WatchUi.GlanceView {
         if (!(Toybox has :Activity)) {
             return;
         }
+        // No null test on info: the SDK declares getActivityInfo() as never
+        // null, and the compiler flagged one as unreachable (first v1b build).
         var info = Activity.getActivityInfo();
-        if (info == null) {
-            return;
-        }
         var altitude = info.altitude;
         if (altitude != null) {
             state.watchAltitude = altitude.toFloat();
