@@ -1253,4 +1253,7 @@ The options:
   bars, so the choice may be false precision. The skin-level effects come
   back properly in v2
 
+- Build plan updated: the formula's `h_grid` definition, the payload note,
+  and the resolution note now describe the cell mean and where it comes from.
+
 Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
