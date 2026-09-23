@@ -19,9 +19,9 @@ all, so the altitude correction had no baseline. Cause, from Open-Meteo's own
 source: it stores **no terrain heights for CAMS**. The app now computes the
 cell height itself - the mean of 49 terrain heights across the CAMS cell, from
 Open-Meteo's Elevation API, once per cell (`UvCell.mc`). **Next: Matt compiles
-and runs "Testing the cell height" in TOOLCHAIN.md.** Then question 25 (now
-re-explained in plain terms in the last session log entry), then v1b. See the
-last session log entry.
+and runs "Testing the cell height" in TOOLCHAIN.md.** Then derive and source
+the shrunken non-snow surface figures (question 25, **decided B**), then v1b.
+See the last session log entry.
 
 The v1c-before-v1b order was not optional: the review showed v1a's position,
 altitude and freshness logic is what v1b would be built on, and it was wrong.
@@ -156,8 +156,11 @@ change what v1b is built on.
 Next action, in order:
 1. **Compile and test the cell height** (TOOLCHAIN.md, "Testing the cell
    height"). Decided and written 2026-09-23; see the last session log entry
-2. Matt decides question 25 - re-explained in plain terms in the last session
-   log entry
+2. **Question 25 is decided: B, shrink the non-snow surfaces.** Next session
+   derives new figures for sand, concrete and water (and checks grass) from
+   sources, by the same physics used for snow, proposes them to Matt with the
+   evidence, and only then changes `UvSettings.surfaceIncrement()`. All six
+   surfaces stay in the list
 3. Then v1b. Note for its design: the cell-height request is a second network
    call the background service must either make or leave to the foreground
 
@@ -190,7 +193,7 @@ Next action, in order:
 | 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
 | 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | **Answered 2026-09-23: one decimal.** Already what v1c does |
 | 23 | Situational surface: expire back to grass at local midnight, or after ~12 h? | v1c | **Answered 2026-09-23: local midnight** |
-| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | Open, low priority. **Re-explained in plain terms 2026-09-23** (last session log entry). Awaiting Matt's choice of A (leave), B (shrink by the snow logic) or C (collapse to grass + snow) |
+| 25 | Should the non-snow surfaces (sand +9%, concrete +5%, water +3.5%) also shrink? Sand now exceeds old snow. The review's physics - the index is horizontal irradiance, raised by ground-atmosphere multiple scattering over the whole region, not by the patch you stand on - suggests all four overstate the index. They were left at v1a's figures because the review did not challenge them and Matt did not decide it | v1c follow-up | **Answered 2026-09-23: B - shrink them.** Keep all six surfaces; derive smaller, sourced figures for sand, concrete and water (and re-check grass) by the snow logic. Figures not yet derived - next session |
 | 24 | Which model does the v2 dose-integrator review pass? | v2 review | Open. Matt moved the project to Opus 5.5 on 2026-09-23 and is inclined to use Opus 5.5 at medium effort rather than Fable 5.1, on published benchmarks. Not yet decided |
 
 ---
@@ -250,6 +253,7 @@ Next action, in order:
 | 2026-09-23 | A surface other than grass resets at local midnight | It is situational, and a setting with no exit was a standing weekday over-report after a ski weekend |
 | 2026-09-23 | Position and altitude sampled on every onShow; cached fix over 60 min refused | The distance check could never fire, and a real watch's cached fix is wherever GPS last ran |
 | 2026-09-23 | ~~Request `elevation=nan`; on HTTP 400 or unparseable body, retry once without it~~ **SUPERSEDED same day, see next row** | The default `elevation` is the point terrain height, which zeroes the altitude correction on a hill. A refused parameter must not cost a reading |
+| 2026-09-23 | Non-snow surfaces shrink by the same logic as snow (question 25, option B); all six surfaces stay | The index rises with the brightness of the whole region, not the patch underfoot, so v1a's albedo x 0.5 overstates sand, concrete and water as it did snow. Keeping the list gives wearers a choice that matches what they see. Matt: had the list been collapsed instead, water should still have been kept, so ground, water and snow are all represented |
 | 2026-09-23 | Grid-cell height = mean of 49 Elevation API heights across the cell the UV response names; once per cell, cached | `elevation=nan` returns nothing: Open-Meteo stores no terrain for CAMS. ECMWF builds model terrain as the mean height over each grid box, so this reproduces the same quantity. The response's `latitude`/`longitude` are documented as the cell centre |
 | 2026-09-23 | UV interpolated between hours | Hourly values are instantaneous; the step read was up to 30-50% off on the shoulders |
 | 2026-09-23 | Fresh window 6 h, not 2 h | CAMS runs twice a day; a 2 h refetch returns the same numbers |
@@ -1253,6 +1257,12 @@ The options:
   bars, so the choice may be false precision. The skin-level effects come
   back properly in v2
 
+- **Matt decided question 25: B.** Shrink sand, concrete and water by the
+  same logic as snow; keep all six surfaces, because wearers should still feel
+  they have a real choice of ground. His note for the record: had it been C,
+  water should still have stayed, so ground, water and snow are all
+  represented. **Figures are not yet derived.** The next session sources them
+  first and proposes them before any code changes.
 - Build plan updated: the formula's `h_grid` definition, the payload note,
   and the resolution note now describe the cell mean and where it comes from.
 
