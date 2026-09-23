@@ -21,9 +21,21 @@ cell height itself - the mean of 49 terrain heights across the CAMS cell, from
 Open-Meteo's Elevation API, once per cell (`UvCell.mc`). **The cell-height test ran
 the same day and passed what it was asked**, but showed the response's
 coordinates name a 0.1 degree greenhouse-gas cell, not the 0.4 degree UV cell.
-**Fixed (the app now computes the cell itself), NOT YET COMPILED. Next: Matt
-re-runs "Testing the cell height".** Question 25's figures are written and
-confirmed on screen. Then v1b. See the last session log entry.
+**Fixed (the app now computes the cell itself), NOT YET COMPILED.**
+Question 25's figures are written and confirmed on screen.
+
+**Next session, in this order:**
+1. Matt re-runs "Testing the cell height" (TOOLCHAIN.md) and pastes the
+   `UV OK`, `GET` and `Cell height` lines. Expected: `cell=51.20,-115.60
+   resp=51.10,-115.80` at both Sunshine positions, `cell=51.20,-114.00
+   resp=51.00,-114.10` at Calgary, a fresh elevation request at the first
+   Sunshine fetch, `alt=-15%` there. Matt also reports the one item in VS
+   Code's Problems panel (unread so far)
+2. Then v1b. Fold in: the background service needs the cell height too and
+   cannot write storage; the build plan's "every 30 min" refresh is wrong
+   (CAMS updates twice a day)
+
+See the last session log entry.
 
 The v1c-before-v1b order was not optional: the review showed v1a's position,
 altitude and freshness logic is what v1b would be built on, and it was wrong.
