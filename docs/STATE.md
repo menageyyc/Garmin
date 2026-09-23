@@ -24,9 +24,9 @@ are confirmed on screen.
 
 **v1b BUILDS AND RUNS** (2026-09-23, same session). The background service
 fetched, measured a new cell, and delivered to the app; **background memory
-budget measured: 59 kB, peak use 13 kB.** Two items still open: question 16
-(delivery to the glance - the step-4 attempt never ran the service) and the
-optional UV grid test (the `hr=` at `51.300, -115.450` still to be read). Matt decided
+budget measured: 59 kB, peak use 13 kB.** **The UV grid is confirmed as the 0.4
+degree cell** (step 5). One item still open: question 16 (delivery to the
+glance - the step-4 attempt never ran the service). Matt decided
 the four design questions: refresh every 3 h, the background fetches a new
 cell's height itself, data returns through `Background.exit()`, and
 `uv_index_clear_sky` is fetched, stored and shown on the reading page.
@@ -1714,3 +1714,20 @@ UV OK raw=1.42 hr=1.15 eff=1.21 clr=1.47 cell=51.20,-115.60 resp=51.10,-115.80 c
   app's own first `onShow` lines. Either Matt triggered it at once, or a
   first registration of a 3-hour event fires immediately. Worth knowing for
   the watch, not a fault either way
+
+### 2026-09-23 - UV grid CONFIRMED: the UV comes from the 0.4 degree cell
+
+```
+UV OK raw=1.42 hr=1.15 eff=1.21 clr=1.47 cell=51.20,-115.60 resp=51.10,-115.80 cellElev=2060 m pointElev=1687 m idx=16/48 slot+964s alt=-15% surface=0%
+UV OK raw=1.43 hr=1.15 eff=1.21 clr=1.48 cell=51.20,-115.60 resp=51.30,-115.40 cellElev=2060 m pointElev=2065 m idx=16/48 slot+1001s alt=-15% surface=0%
+```
+
+- Two positions in **different 0.1 degree cells** (`resp=51.10,-115.80` vs
+  `51.30,-115.40`) but the same 0.4 degree cell, 37 s apart
+- Same `hr=1.15`, and `raw` at its `slot` gives the next hour: 2.14-2.18
+  at both (from the two-decimal rounding). Calgary, a different 0.4 degree
+  cell, gave 2.03-2.08 at the same hour - the ranges do not overlap, so the
+  test can tell cells apart, and these two are the same series
+- **Conclusion:** `uv_index` is served from the 0.4 degree `cams_global`
+  grid, exactly the cell `UvCell` computes. The last unproven link in the
+  cell-height chain is closed. The source-code reading was right
