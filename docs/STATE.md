@@ -10,56 +10,55 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 
 ## RESUMING? READ THIS FIRST
 
-**v0 AND v1a ARE BOTH COMPLETE AND CONFIRMED RUNNING** in the simulator on
-2026-09-22.
+**STATE AS OF 2026-09-23 (end of session): v0, v1a, v1c AND v1b ARE ALL
+COMPLETE AND CONFIRMED RUNNING IN THE SIMULATOR. NOTHING HAS BEEN ON THE WATCH
+YET.** Every build in the repo compiles clean (the last Problems panel was
+empty apart from warnings since fixed and confirmed).
 
-**UPDATED 2026-09-23 (latest session): v1c IS CLOSED. The cell height is
-CONFIRMED WORKING** in the simulator: the app computes the 0.4 degree UV cell
-from its own position (`cell=51.20,-115.60` at both Sunshine positions,
-`51.20,-114.00` at Calgary, exactly as predicted), averages 49 Elevation API
-heights across it (2,060 m and 1,101 m), and caches it. The one Problems-panel
-item was an unreachable null test in `UvSense.mc`, removed (**that one-line
-change is not yet compiled**; the next build confirms it). Question 25's figures
-are confirmed on screen.
+**What the app does now**
+- Fetches CAMS UV and clear-sky UV (48 h) from Open-Meteo, for the 0.4 degree
+  `cams_global` cell the watch computes from its own position
+- Corrects for altitude against that cell's mean terrain height (49 Elevation
+  API points, measured once per cell, four cells remembered) and for the
+  surface the wearer picks (resets to grass at midnight)
+- A background service refreshes every 3 hours, even with the app closed,
+  and delivers to the app **or the glance** (both seen in the simulator)
+- Reading page: corrected UV, the API's own figure, the correction terms,
+  "up to X if sky clears" when the clear-sky ceiling is 0.5 or more higher,
+  and freshness. Diagnostics page: position and fix age, altitude vs cell
+  height, HTTP and hour index, surface, the background's last result
+- The cache counts as current only in the same CAMS cell and within 6 h
 
-**v1b BUILDS AND RUNS** (2026-09-23, same session). The background service
-fetched, measured a new cell, and delivered to the app; **background memory
-budget measured: 59 kB, peak use 13 kB.** **The UV grid is confirmed as the 0.4
-degree cell** (step 5). One item still open: question 16 (delivery to the
-glance - the step-4 attempt never ran the service). Matt decided
-the four design questions: refresh every 3 h, the background fetches a new
-cell's height itself, data returns through `Background.exit()`, and
-`uv_index_clear_sky` is fetched, stored and shown on the reading page.
+**Measured:** app budget 763.6 kB (v1a peak 23.3 kB); glance ~59.9 kB;
+**background 59 kB, using 13 kB.** Nothing is memory-constrained.
 
-**Next session:** Matt runs "Testing v1b" in TOOLCHAIN.md and pastes the
-compile errors (likely - first background build) or the console. The single
-most important number is the `mem=used/total` on the `BG UV OK` line: the
-background memory budget, never measured. The optional UV grid test is step
-5 of that section.
+**Confirmed facts that cost real time** (details in the log): the air-quality
+response's `elevation` is the point terrain height; `elevation=nan` returns
+nothing (no CAMS terrain on Open-Meteo); the response's `latitude`/`longitude`
+name a 0.1 degree greenhouse-gas cell, while the UV comes from the 0.4 degree
+cell (tested directly, both ways); background processes CAN write
+`Application.Storage` from API 3.2 but v1b deliberately does not.
 
-See the last two session log entries. The one before last corrects a fact
-this file treated as settled since 2026-09-22 (Storage writes from the
-background).
+**Next session - Matt's call, two candidates:**
+1. **Put it on the wrist (recommended first).** Sideload (TOOLCHAIN.md
+   section 5) and wear it. Everything so far rests on the simulator, whose
+   altitude is a fixed -18 m and whose cached fix is always fresh. Things
+   only the watch can show: the real barometer against the cell height,
+   the real age of a cached fix (the 60-minute gate), whether background
+   runs happen every 3 h unattended (the diagnostics `bg` line), whether
+   the first registration fires a run at once (unknown - Matt did not
+   remember whether he triggered the first simulator run), MENU as a long
+   press of UP, and delivery to the glance on real hardware
+2. **Start v2** - the dose integrator, sessions, the data field. Open
+   questions it needs first: 10 (7-day load in scope?), 11 (can a data field
+   vibrate?), 17 (indoor sub-sport constant names), 18 (indoor GPS accuracy,
+   a wrist test), 24 (which model reviews the integrator). Hard constraints
+   3, 4 and 7 in CLAUDE.md govern it
 
-See the last session log entry.
-
-The v1c-before-v1b order was not optional: the review showed v1a's position,
-altitude and freshness logic is what v1b would be built on, and it was wrong.
-
-1. **v1c** - the correction pass from `docs/REVIEW-v1a-findings.md`. Built
-   and running 2026-09-23; cell height confirmed the same day. **Closed.**
-2. **v1b** - the background service, the cached refresh, and the glance
-   rewrite. **Read the 2026-09-22 session log entry on the background
-   architecture before starting it, and then the last entry in this file,
-   which corrects one of its three facts.** Established 2026-09-22:
-   `onBackgroundData()` fires in the glance too, and GPS from a background
-   process is unreliable. Also stated then, and **wrong as stated**: "a
-   background service cannot write storage". Garmin's Storage documentation
-   says background processes can write `Application.Storage` from API 3.2
-   (epix Pro is 5.2). `Application.Properties` still cannot be written from
-   the background. Whether v1b uses that is a design decision, not yet made.
-   **The diagram's "every 30 min" is also wrong** (CAMS updates twice a day
-   - review finding 7) and is to be corrected when v1b is designed.
+**Minor leftovers, none blocking:** the "if sky clears" line has never been
+seen on screen (every test so far had a near-clear forecast); Storage keys
+`cla`/`clo`/`ch` from v1c are orphaned; `docs/TOOLCHAIN.md` carries completed
+test sections kept for reference.
 
 **What v1a proved, live:** three pages with a page indicator, on-watch settings
 pickers, `HTTP 200`, `idx 15/48` (so `forecast_days=2` took), correct grid
@@ -68,8 +67,7 @@ piste reading `+42% fresh snow`. `Menu2`, `Application.Properties`,
 `catch (e)` and `MenuItem`'s four-argument constructor are all now exercised.
 
 **Memory, measured:** app budget **763.6 kB**, v1a peaks at **23.3 kB** (3%).
-Glance budget ~59.9 kB. **The background budget is still unknown and is the
-only one that constrains anything.**
+Glance budget ~59.9 kB. Background budget **59 kB**, v1b uses 13 kB.
 
 Two v0 runs settled the data source:
 
@@ -156,7 +154,7 @@ pushing elsewhere means he never receives the work.
 
 ## Current phase
 
-**v1a and v1c COMPLETE** (v1c closed 2026-09-23). Builds clean and runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
+**v1a, v1c and v1b COMPLETE in the simulator** (v1b closed 2026-09-23; not yet on the watch). Builds clean and runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
 (5.2.0). The reading page shows UV corrected for altitude and surface with the
 API's own figure beneath it; the hourly series is cached with the time and
 place it was fetched for, so a failed fetch degrades to "two hours old" rather
@@ -178,8 +176,9 @@ change what v1b is built on.
 **2026-09-23: v1c closed.** The cell-height re-test passed on every point.
 Question 25's figures are on screen.
 
-**2026-09-23: v1b written, NOT COMPILED.** Next action: its first build and
-"Testing v1b" in TOOLCHAIN.md.
+**2026-09-23: v1b COMPLETE in the simulator.** Background refresh, glance
+delivery, clear-sky ceiling, freshness by cell. **Next: the watch, or v2** -
+see the resume block.
 
 ---
 
@@ -202,7 +201,7 @@ Question 25's figures are on screen.
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 | 14 | Does the phone-side App Settings editor show both list settings, and does the on-watch MENU route write the same value? | v1a settings | Open - test in simulator |
 | 15 | Does `Menu2` + `Menu2InputDelegate` behave as written on API 5.2? | v1a settings | Open - the first build will say |
-| 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - forum-reported, unverified here. **Test written 2026-09-23:** "Testing v1b" step 4 |
+| 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | **ANSWERED 2026-09-23 (simulator): yes.** With the glance on screen, a triggered run printed `BG delivered` and no app-view lines. Real hardware still to confirm |
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
 | 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A). **Tested 2026-09-23:** `pointElev=1687 m` and `2192 m` at the two Sunshine positions (real ~1,660 / ~2,160 m), so the default field IS the point terrain height - finding 1 confirmed. The mean works (49/49 points, 1,993 m); the response's coordinates turned out to name the wrong grid, and the cell is now computed on the watch. **Re-tested 2026-09-23 on the computed cell: passed** - `51.20,-115.60` at both Sunshine positions (2,060 m), `51.20,-114.00` at Calgary (1,101 m), cache hit at the second Sunshine position |
@@ -1731,3 +1730,17 @@ UV OK raw=1.43 hr=1.15 eff=1.21 clr=1.48 cell=51.20,-115.60 resp=51.30,-115.40 c
 - **Conclusion:** `uv_index` is served from the 0.4 degree `cams_global`
   grid, exactly the cell `UvCell` computes. The last unproven link in the
   cell-height chain is closed. The source-code reading was right
+
+### 2026-09-23 - Question 16 answered; v1b closed; session handed over
+- **Step 4:** with Glance Launch Mode set to the glance and the glance on
+  screen (`UV 1.3 LOW`, small, left-aligned), a triggered temporal event
+  printed `Background: BG GET ... lat=51.3000 lon=-115.4500`, `BG UV OK
+  cell=51.20,-115.60 height=2060 m mem=13/59 kB`, `BG delivered: 48 h ...`,
+  and **no** `Baro altitude` lines, which only the app view prints. So the
+  glance process took delivery and saved it. **Question 16: yes**, in the
+  simulator
+- **Diagnostics `bg` line** on screen: `bg OK 11 min ago`, fits the chord
+- **First-run behaviour** of the temporal event: unknown (Matt does not
+  remember triggering the first run). The watch will show it
+- **v1b is closed** in the simulator. The resume block at the top of this file
+  is rewritten as the handover for a fresh session
