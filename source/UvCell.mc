@@ -23,8 +23,11 @@ import Toybox.Application;
 //
 // Terrain does not change, so a cell's height is fetched once and kept.
 //
-// App scope only. The glance reads the result through UvForecast and never
-// needs this module.
+// Three scopes since v1b (2026-09-23): the app measures cells, the background
+// service measures a new one itself (decision 2) and reads the cache, and the
+// glance both judges freshness by cell (sameCell) and remembers a height the
+// background delivered.
+(:glance :background)
 module UvCell {
 
     // Open-Meteo's cams_global grid: regular, 0.4 degrees, anchored at -90 /
@@ -49,9 +52,15 @@ module UvCell {
     // cell, whatever rounding the JSON carried.
     const MATCH_DEGREES = 0.05;
 
-    const KEY_LAT = "cla";
-    const KEY_LON = "clo";
-    const KEY_HEIGHT = "ch";
+    // The last few cells measured, newest first, flattened as
+    // [lat, lon, height, lat, lon, height, ...]. v1c kept one cell under
+    // "cla" / "clo" / "ch"; the first cell-height re-test showed a Calgary -
+    // Sunshine - Calgary trip re-measuring Calgary. Four cells is about 100
+    // bytes. The old keys are orphaned and harmless: nothing reads them.
+    const KEY_CELLS = "cells";
+    const MAX_CELLS = 4;
+
+    const ELEVATION_URL = "https://api.open-meteo.com/v1/elevation";
 
     function pointCount() as Number {
         return SIDE * SIDE;
@@ -73,7 +82,7 @@ module UvCell {
     // point: roundf((coordinate - origin) / 0.4). The same rounding here gives
     // the same cell. The shifted coordinates are never negative, so adding
     // 0.5 and truncating is rounding to nearest.
-    function cellLat(lat as Float) as Float {
+    function row(lat as Float) as Number {
         var y = ((lat + 90.0) / SPACING + 0.5).toNumber();
         if (y < 0) {
             y = 0;
@@ -81,11 +90,11 @@ module UvCell {
         if (y > ROWS - 1) {
             y = ROWS - 1;
         }
-        return -90.0 + y * SPACING;
+        return y;
     }
 
     // Column 900 is longitude +180, which is the same meridian as column 0.
-    function cellLon(lon as Float) as Float {
+    function col(lon as Float) as Number {
         var x = ((lon + 180.0) / SPACING + 0.5).toNumber();
         if (x >= COLS) {
             x = x - COLS;
@@ -93,32 +102,84 @@ module UvCell {
         if (x < 0) {
             x = 0;
         }
-        return -180.0 + x * SPACING;
+        return x;
     }
 
-    // The stored height, if it belongs to this cell. Null otherwise.
-    function cached(cellLat as Float, cellLon as Float) as Float or Null {
-        var lat = UvNum.asFloat(Application.Storage.getValue(KEY_LAT));
-        if (lat == null) {
-            return null;
-        }
-        var lon = UvNum.asFloat(Application.Storage.getValue(KEY_LON));
-        if (lon == null) {
-            return null;
-        }
-        if (!near(lat, cellLat)) {
-            return null;
-        }
-        if (!near(lon, cellLon)) {
-            return null;
-        }
-        return UvNum.asFloat(Application.Storage.getValue(KEY_HEIGHT));
+    function cellLat(lat as Float) as Float {
+        return -90.0 + row(lat) * SPACING;
     }
 
-    function remember(cellLat as Float, cellLon as Float, height as Float) as Void {
-        Application.Storage.setValue(KEY_LAT, cellLat);
-        Application.Storage.setValue(KEY_LON, cellLon);
-        Application.Storage.setValue(KEY_HEIGHT, height);
+    function cellLon(lon as Float) as Float {
+        return -180.0 + col(lon) * SPACING;
+    }
+
+    // Whether two positions are served the same forecast. Compared as whole
+    // grid indices, so there is no float equality to go wrong.
+    //
+    // This replaced a 25 km "near" test in UvForecast (v1b, 2026-09-23). A
+    // cell is about 44 x 28 km at 51 degrees north, so 25 km could cross
+    // into a neighbouring cell - a different forecast - while the cache
+    // still called itself current.
+    function sameCell(lat1 as Float, lon1 as Float, lat2 as Float, lon2 as Float) as Boolean {
+        if (row(lat1) != row(lat2)) {
+            return false;
+        }
+        return col(lon1) == col(lon2);
+    }
+
+    // The stored height, if one of the remembered cells is this one. Null
+    // otherwise. Checking is off because a stored array hands back Any; each
+    // element is narrowed before use.
+    (:typecheck(false))
+    function cached(cellLat as Lang.Float, cellLon as Lang.Float) as Lang.Float or Null {
+        var cells = Application.Storage.getValue(KEY_CELLS);
+        if (!(cells instanceof Lang.Array)) {
+            return null;
+        }
+        for (var i = 0; i + 2 < cells.size(); i += 3) {
+            var la = UvNum.asFloat(cells[i]);
+            var lo = UvNum.asFloat(cells[i + 1]);
+            if (la != null && lo != null) {
+                if (near(la, cellLat) && near(lo, cellLon)) {
+                    return UvNum.asFloat(cells[i + 2]);
+                }
+            }
+        }
+        return null;
+    }
+
+    // Puts this cell first and keeps up to three others behind it. Never
+    // called from the background process, which hands its heights back
+    // through Background.exit() instead (decision 3, 2026-09-23).
+    (:typecheck(false))
+    function remember(cellLat as Lang.Float, cellLon as Lang.Float, height as Lang.Float) as Void {
+        var out = [cellLat, cellLon, height];
+        var old = Application.Storage.getValue(KEY_CELLS);
+        if (old instanceof Lang.Array) {
+            for (var i = 0; i + 2 < old.size(); i += 3) {
+                if (out.size() < MAX_CELLS * 3) {
+                    var la = UvNum.asFloat(old[i]);
+                    var lo = UvNum.asFloat(old[i + 1]);
+                    var h = UvNum.asFloat(old[i + 2]);
+                    if (la != null && lo != null && h != null) {
+                        if (!(near(la, cellLat) && near(lo, cellLon))) {
+                            out.add(la);
+                            out.add(lo);
+                            out.add(h);
+                        }
+                    }
+                }
+            }
+        }
+        Application.Storage.setValue(KEY_CELLS, out);
+    }
+
+    // The Elevation API request for a cell's 49 points.
+    function heightParams(cellLat as Float, cellLon as Float) as Dictionary {
+        return {
+            "latitude"  => latitudes(cellLat, cellLon),
+            "longitude" => longitudes(cellLat, cellLon)
+        };
     }
 
     // The two comma-separated lists the Elevation API takes. Built by the same

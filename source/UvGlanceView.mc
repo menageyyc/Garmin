@@ -1,16 +1,18 @@
 import Toybox.Lang;
 import Toybox.WatchUi;
 import Toybox.Graphics;
+import Toybox.Activity;
 
-// The glance reads the cached series the app persisted and applies the same
-// correction the app does, so the two never disagree. It never fetches:
-// glances run under a tight memory budget and are drawn often, so network work
-// belongs in the background service, which arrives in v1b.
+// The glance reads the cached series and applies the same correction the app
+// does, so the two never disagree. It never fetches: since v1b the background
+// service does, every three hours, and hands the result to whichever of the
+// app or the glance is running (UvGuardApp.onBackgroundData).
 //
-// The altitude it corrects with is the last one a fetch recorded rather than a
-// fresh barometer reading. Altitude changes slowly next to how often a glance
-// is drawn, and taking a sensor reading on every draw is not a trade a glance
-// budget can afford.
+// The altitude it corrects with is read from the barometer on every draw
+// (v1b). Before, it was the one stored when the app was last opened - on a
+// ski day, the car park. Activity.getActivityInfo() reads what the system
+// already holds and powers nothing. If Activity is not available in the
+// glance on this device, the stored altitude is used as before.
 //
 // A glance cannot be tapped to toggle anything - input delegate methods are not
 // invoked while a glance view is running - so this stays purely informational.
@@ -24,6 +26,7 @@ class UvGlanceView extends WatchUi.GlanceView {
     function onUpdate(dc as Graphics.Dc) as Void {
         var state = UvState.get();
         var h = dc.getHeight();
+        sampleAltitude(state);
 
         dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_BLACK);
         dc.clear();
@@ -54,5 +57,21 @@ class UvGlanceView extends WatchUi.GlanceView {
         dc.drawText(0, (h * 0.42).toNumber(), Graphics.FONT_TINY,
                     uv.format("%.1f") + "  " + UvScale.riskBand(uv) + suffix,
                     Graphics.TEXT_JUSTIFY_LEFT);
+    }
+
+    // In memory only, never written: the glance keeps its storage writes to
+    // taking delivery of background data.
+    private function sampleAltitude(state as UvState) as Void {
+        if (!(Toybox has :Activity)) {
+            return;
+        }
+        var info = Activity.getActivityInfo();
+        if (info == null) {
+            return;
+        }
+        var altitude = info.altitude;
+        if (altitude != null) {
+            state.watchAltitude = altitude.toFloat();
+        }
     }
 }

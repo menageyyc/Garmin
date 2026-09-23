@@ -1,6 +1,7 @@
 import Toybox.Lang;
 import Toybox.Application;
 import Toybox.Time;
+import Toybox.System;
 
 // Where the fix came from, so a failure is diagnosable at a glance. Declared
 // at file scope rather than inside the class - Monkey C is reliable about
@@ -16,7 +17,9 @@ enum FixSource {
 //
 // The glance and the app do not share memory - a glance runs as its own build
 // scope with its own budget - so anything both need goes through
-// Application.Storage. The app fetches and writes; the glance only reads.
+// Application.Storage. The app fetches and writes. The glance reads, and
+// since v1b also writes one thing: a forecast the background service hands
+// it (receiveBackground).
 // Getting this wrong is the usual reason a glance shows stale or empty data
 // while the app looks fine.
 (:glance)
@@ -28,8 +31,8 @@ class UvState {
     // the wrong expectations - the first v1 run wipes the store outright.
     // There is nothing in a v0 store worth migrating: it held one number that
     // is refetched within seconds.
-    private const KEY_LAT = "lat";
-    private const KEY_LON = "lon";
+    // Position keys are UvFetch's, because the background service reads them
+    // too (v1b) and one spelling cannot drift from the other.
     private const KEY_ALT = "wa";
 
     // Where the watch currently thinks it is.
@@ -102,8 +105,8 @@ class UvState {
     // Storage can return null for any key, including one written earlier, so
     // every read is guarded rather than assumed.
     public function load() as Void {
-        latitude      = UvNum.asFloat(Application.Storage.getValue(KEY_LAT));
-        longitude     = UvNum.asFloat(Application.Storage.getValue(KEY_LON));
+        latitude      = UvNum.asFloat(Application.Storage.getValue(UvFetch.KEY_LAT));
+        longitude     = UvNum.asFloat(Application.Storage.getValue(UvFetch.KEY_LON));
         watchAltitude = UvNum.asFloat(Application.Storage.getValue(KEY_ALT));
 
         // A restored position is where the last fetch was made, not a fix read
@@ -113,9 +116,12 @@ class UvState {
         forecast.load();
     }
 
+    // Called on every show (v1b) as well as before every fetch, so the
+    // background service fetches for where the watch last was, not where
+    // it last fetched (2026-09-23 review, finding 3).
     public function savePosition() as Void {
-        Application.Storage.setValue(KEY_LAT, latitude);
-        Application.Storage.setValue(KEY_LON, longitude);
+        Application.Storage.setValue(UvFetch.KEY_LAT, latitude);
+        Application.Storage.setValue(UvFetch.KEY_LON, longitude);
         Application.Storage.setValue(KEY_ALT, watchAltitude);
     }
 
@@ -140,6 +146,77 @@ class UvState {
                                       watchAltitude,
                                       forecast.gridElevation,
                                       UvSettings.increment());
+    }
+
+    // The same correction applied to the clear-sky value: what the big number
+    // would read if the forecast cloud does not turn up. v1b.
+    public function effectiveClearNow() as Float or Null {
+        var clear = forecast.clearAt(Time.now().value());
+        if (clear == null) {
+            return null;
+        }
+        return UvCorrection.effective(clear,
+                                      watchAltitude,
+                                      forecast.gridElevation,
+                                      UvSettings.increment());
+    }
+
+    // Takes delivery of what the background service handed back, in the app
+    // or in the glance - whichever process AppBase.onBackgroundData() fires
+    // in. Only these foreground processes write the forecast keys, so there
+    // is one writer per key (decision 3, 2026-09-23).
+    //
+    // A failure leaves the cached series alone, as a failed foreground fetch
+    // does. A payload older than what is already stored is dropped: a
+    // START press can land a fresher series while the background ran.
+    //
+    // Checking is off: the payload is Any, and every value is narrowed.
+    (:typecheck(false))
+    public function receiveBackground(data) as Void {
+        var now = Time.now().value();
+        Application.Storage.setValue(UvFetch.KEY_BG_AT, now);
+
+        if (!(data instanceof Lang.Dictionary)) {
+            Application.Storage.setValue(UvFetch.KEY_BG_ERROR, "no data");
+            return;
+        }
+        var err = data.get(UvFetch.P_ERROR);
+        if (err != null) {
+            var code = UvNum.asNumber(data.get(UvFetch.P_CODE));
+            Application.Storage.setValue(UvFetch.KEY_BG_ERROR,
+                    err.toString() + (code == null ? "" : " (" + code.toString() + ")"));
+            return;
+        }
+
+        var at = UvNum.asNumber(data.get(UvFetch.P_AT));
+        var have = forecast.fetchedAt;
+        if (at != null && have != null && at < have) {
+            Application.Storage.deleteValue(UvFetch.KEY_BG_ERROR);
+            return;
+        }
+        if (!forecast.adopt(data, data.get(UvFetch.P_LAT), data.get(UvFetch.P_LON), at)) {
+            Application.Storage.setValue(UvFetch.KEY_BG_ERROR, "bad payload");
+            return;
+        }
+
+        // The height travels with the series, so a new cell's forecast is
+        // never paired with an old cell's height. Absent means the service
+        // could not get it; the correction is then off, as in the foreground.
+        var height = UvNum.asFloat(data.get(UvFetch.P_HEIGHT));
+        forecast.gridElevation = height;
+        var cellLat = UvNum.asFloat(data.get(UvFetch.P_CELL_LAT));
+        var cellLon = UvNum.asFloat(data.get(UvFetch.P_CELL_LON));
+        if (height != null && cellLat != null && cellLon != null) {
+            UvCell.remember(cellLat, cellLon, height);
+        }
+        forecast.save();
+        Application.Storage.deleteValue(UvFetch.KEY_BG_ERROR);
+
+        System.println("BG delivered: " + forecast.hourCount().toString() + " h, cell "
+                       + (cellLat == null ? "?" : cellLat.format("%.2f")) + ","
+                       + (cellLon == null ? "?" : cellLon.format("%.2f"))
+                       + " height " + (height == null ? "none" : height.format("%.0f") + " m")
+                       + " clear " + (forecast.clearValues == null ? "no" : "yes"));
     }
 
     public function cacheState() as Number {

@@ -16,14 +16,13 @@ import Toybox.Lang;
 // a static checker cannot do. Every one returns a fully typed value, so
 // nothing downstream loses checking.
 //
-// (:glance) only, for now. This module belongs in the background scope too -
-// the service will parse JSON with it - but v1b adds that annotation at the
-// same time as the service and the manifest permission. Annotating early is
-// not free: ANY (:background) in the project makes it a background
-// application, and the compiler then rejects the build until the manifest
-// declares the Background permission. An annotation is a declaration that a
-// scope exists, not a note about a scope that might.
-(:glance)
+// All three scopes since v1b (2026-09-23): the background service parses
+// JSON with it. The annotation arrived in the same change as the service and
+// the manifest's Background permission, because ANY (:background) in the
+// project makes it a background application and the build fails until the
+// permission is declared. An annotation is a declaration that a scope
+// exists, not a note about a scope that might.
+(:glance :background)
 module UvNum {
 
     // Open-Meteo returns an integer where a value happens to be whole and a

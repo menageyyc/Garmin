@@ -22,10 +22,20 @@ item was an unreachable null test in `UvSense.mc`, removed (**that one-line
 change is not yet compiled**; the next build confirms it). Question 25's figures
 are confirmed on screen.
 
-**Next session: v1b design, then v1b.** The design and the decisions it needs
-from Matt are in the last session log entry. **Read its "Storage writes from
-the background" finding first** - it corrects a fact this file has treated as
-settled since 2026-09-22.
+**v1b IS WRITTEN, NOT COMPILED** (2026-09-23, same session). Matt decided
+the four design questions: refresh every 3 h, the background fetches a new
+cell's height itself, data returns through `Background.exit()`, and
+`uv_index_clear_sky` is fetched, stored and shown on the reading page.
+
+**Next session:** Matt runs "Testing v1b" in TOOLCHAIN.md and pastes the
+compile errors (likely - first background build) or the console. The single
+most important number is the `mem=used/total` on the `BG UV OK` line: the
+background memory budget, never measured. The optional UV grid test is step
+5 of that section.
+
+See the last two session log entries. The one before last corrects a fact
+this file treated as settled since 2026-09-22 (Storage writes from the
+background).
 
 See the last session log entry.
 
@@ -161,12 +171,11 @@ distance check can never fire, and a real watch's cached fix is of unknown age.
 two session log entries). v1b waits for v1c, because findings 3, 4, 7 and 10
 change what v1b is built on.
 
-**2026-09-23: v1c closed.** The cell-height re-test passed on every point
-(see the last session log entry). Question 25's figures are on screen.
+**2026-09-23: v1c closed.** The cell-height re-test passed on every point.
+Question 25's figures are on screen.
 
-Next action: **v1b design.** The proposal and the decisions it needs from Matt
-are in the last session log entry. No v1b code is written until he has
-answered them.
+**2026-09-23: v1b written, NOT COMPILED.** Next action: its first build and
+"Testing v1b" in TOOLCHAIN.md.
 
 ---
 
@@ -180,7 +189,7 @@ answered them.
 | 4 | Sun detection method | v2 design | **Answered: activity + manual session** |
 | 5 | Store-published or sideload-only | Review, health wording, licence | Open |
 | 6 | Which API level group does epix Pro sit under? | Target API level | **Answered: API 5.2. SDK 9.2.0 installed** |
-| 7 | App + glance + background memory budgets, from local SDK | Architecture limits | **Partly answered:** the glance reported `~6.8/59.9 kB` on epix Pro, so the glance budget is about 60 kB, not the 32 kB commonly quoted. App and background budgets still unread |
+| 7 | App + glance + background memory budgets, from local SDK | Architecture limits | **Partly answered:** glance ~59.9 kB, app 763.6 kB (both measured). **Background still unread** - v1b's `BG UV OK` console line prints `mem=used/total` for it ("Testing v1b" step 3) |
 | 8 | Exact manifest device ID for epix Pro 47mm | Manifest | **Answered: `epix2pro47mm` is correct - compiler accepted it** |
 | 9 | Do CIQ apps appear as assignable hotkey targets on Epix Pro? | Hotkey toggle | **Answered: NO. Not listed. Hotkey design dead** |
 | 11 | Can a data field call `Attention.vibrate()` on Epix Pro? | v2 alerting rests on it | Open - test in simulator |
@@ -189,7 +198,7 @@ answered them.
 | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
 | 14 | Does the phone-side App Settings editor show both list settings, and does the on-watch MENU route write the same value? | v1a settings | Open - test in simulator |
 | 15 | Does `Menu2` + `Menu2InputDelegate` behave as written on API 5.2? | v1a settings | Open - the first build will say |
-| 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
+| 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - forum-reported, unverified here. **Test written 2026-09-23:** "Testing v1b" step 4 |
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
 | 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A). **Tested 2026-09-23:** `pointElev=1687 m` and `2192 m` at the two Sunshine positions (real ~1,660 / ~2,160 m), so the default field IS the point terrain height - finding 1 confirmed. The mean works (49/49 points, 1,993 m); the response's coordinates turned out to name the wrong grid, and the cell is now computed on the watch. **Re-tested 2026-09-23 on the computed cell: passed** - `51.20,-115.60` at both Sunshine positions (2,060 m), `51.20,-114.00` at Calgary (1,101 m), cache hit at the second Sunshine position |
@@ -262,6 +271,12 @@ answered them.
 | 2026-09-23 | On-screen percentages rounded, not truncated | 0.02 x 100 is 1.9999999 in a 32-bit float; truncated it read +1% and fell under the 2% threshold, so +2% was never shown. Fresh / old snow now read +18% / +8% |
 | 2026-09-23 | Grid-cell height = mean of 49 Elevation API heights across the cell the UV response names; once per cell, cached | `elevation=nan` returns nothing: Open-Meteo stores no terrain for CAMS. ECMWF builds model terrain as the mean height over each grid box, so this reproduces the same quantity. The response's `latitude`/`longitude` are documented as the cell centre |
 | 2026-09-23 | The CAMS cell is computed on the watch: nearest point of the 0.4 deg cams_global grid, `round((coord - origin) / 0.4)` | Open-Meteo's source: the air-quality request mixes cams_global with a 0.1 deg greenhouse-gas domain, and the response's `latitude`/`longitude` come from the last domain that covers you - the greenhouse grid, which carries no UV. CAMS has no terrain file, so Open-Meteo picks the plain nearest 0.4 deg point. Supersedes "the response's latitude/longitude are the cell centre" in the row above |
+| 2026-09-23 | v1b background refresh every 3 hours (decision 1) | CAMS runs twice a day; Open-Meteo's source puts arrival ~8 h after each run, unverified live. 3 h catches a new run within 3 h wherever it lands; 8 fetches a day instead of the plan's 48 |
+| 2026-09-23 | The background service fetches a new cell's height itself (decision 2) | Otherwise the glance shows an uncorrected number until the app is opened. A second request inside 30 s, rare because four cells are remembered |
+| 2026-09-23 | Background data returns through `Background.exit()`, not a Storage write (decision 3) | Storage writes from the background are documented from API 3.2, but exit() keeps one writer per key (no race with a foreground fetch), avoids a feature with a reported per-device bug, and the payload is under 1 kB of the ~8 kB cap |
+| 2026-09-23 | `uv_index_clear_sky` fetched, stored, and shown on the reading page in v1b (decision 4) | Review finding 11: CAMS cloud at 40 km over mountains is the largest error in the chain and fails in the dangerous direction. Shown as "up to X if sky clears", only when 0.5 or more above the corrected number, tinted by its band |
+| 2026-09-23 | Cache freshness judged by CAMS cell, not 25 km | Open-Meteo answers every position in a cell with that cell's values. 25 km could cross into a neighbouring cell while still "current" |
+| 2026-09-23 | Four cells' heights remembered, not one | The re-test showed a Calgary-Sunshine-Calgary trip re-measuring Calgary. ~100 bytes |
 | 2026-09-23 | UV interpolated between hours | Hourly values are instantaneous; the step read was up to 30-50% off on the shoulders |
 | 2026-09-23 | Fresh window 6 h, not 2 h | CAMS runs twice a day; a 2 h refetch returns the same numbers |
 | 2026-09-23 | `migrate()` moved out of `onStart()` | onStart runs in the background process once v1b exists |
@@ -1559,3 +1574,67 @@ Build plan not yet edited: its "every 30 min" and its background-storage
 sentence change once decisions 1 and 3 are made.
 
 Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
+
+### 2026-09-23 - v1b written. NOT COMPILED
+- Matt's four decisions: **every 3 h; the background fetches a new cell's
+  height; `Background.exit()`; clear-sky fetched now and shown in v1b.** He
+  asked for the optional UV grid test to join the next round of GPS testing -
+  it is step 5 of "Testing v1b".
+
+**What v1b contains**
+
+| File | Change |
+|---|---|
+| `manifest.xml` | `Background` permission |
+| `UvFetch.mc` (new) | Shared by foreground and background: the request (now `hourly=uv_index,uv_index_clear_sky`), the parser (uniform-step check and -1 sentinel, moved from `UvForecast.ingest`), and the key names passed between processes. `(:glance :background)` |
+| `UvBackground.mc` (new) | The `ServiceDelegate`. Reads the stored position, fetches, parses, and exits with the series plus the cell height - fetching the height itself for a cell it has not measured. Every path ends in exactly one `Background.exit()`. Logs `mem=used/total` |
+| `UvGuardApp.mc` | `(:background :glance)` on the class. `getServiceDelegate()` returns an array. `onBackgroundData()` hands the payload to `UvState`. `registerRefresh()` registers the 3-hour temporal event from `getInitialView()`, leaving an existing identical registration alone |
+| `UvState.mc` | `receiveBackground()`: saves the series and height, remembers the cell, records the result for diagnostics, and drops a payload older than what is stored. `effectiveClearNow()`. Position keys shared with `UvFetch` |
+| `UvForecast.mc` | `adopt()` replaces `ingest()`. `clearValues` stored under `fc`. Interpolation shared by UV and clear-sky. Freshness by cell, not 25 km |
+| `UvCell.mc` | `(:glance :background)`. `row()` / `col()` / `sameCell()`. Four cells remembered under `cells`; the v1c keys `cla`/`clo`/`ch` are orphaned |
+| `UvClient.mc` | Uses `UvFetch` and `UvCell.heightParams`. Console gains `clr=` |
+| `UvMainView.mc` | Position saved on every `onShow()`. Reading page: "up to X if sky clears". Diagnostics: a `bg` line |
+| `UvGlanceView.mc` | Reads the barometer on every draw (guarded by `Toybox has :Activity`), in memory only |
+| `UvNum.mc` | `(:glance :background)` |
+
+**Choices made inside the decisions, for the record**
+- **The clear-sky margin is 0.5 UV index**, absolute rather than a percentage.
+  The bands are absolute (3, 6, 8, 11), and at night or under a clear
+  forecast the two figures are the same, so the line disappears exactly when
+  it has nothing to say
+- **The clear-sky figure is corrected like the big number** (altitude and
+  surface), so the two are comparable on screen. The console `clr=` is the
+  raw API value, like `raw=`
+- **A background payload older than the stored series is dropped**, so a
+  START press during a background run cannot be overwritten by the run
+- **The glance writes Storage** only in `receiveBackground()`. Forum reports
+  say this is the usual pattern; it has not been seen on this device
+- **Position saved on every show**, so the background fetches for where the
+  watch last was. The review's finding 3 asked for this once v1b existed
+
+**Known gaps, stated plainly**
+- **The background's own new-cell path cannot be reached by ordinary
+  simulator steps.** Opening the app in a new cell makes the foreground fetch
+  and measure it first (freshness is by cell now), so the background only
+  meets an unmeasured cell if the foreground's height request failed. It is a
+  backstop. It will be seen working, if ever, on the watch
+- **A slow height request can cost the whole background run.** The service
+  has 30 seconds; if the second request is still out when it is killed, the
+  UV series from the first is lost with it. The next run, 3 hours later,
+  tries again. Rare, because heights are remembered
+- **When the new CAMS run actually lands** is from Open-Meteo's source
+  ("delay of 8 hours"), not observed. The 3-hour cadence was chosen so it
+  does not matter
+- **Storage writes from the background** are from Garmin's documentation as
+  quoted by search; the pages themselves are blocked from here
+
+**Riskiest for the compiler**, in order: `(:background :glance)` on the app
+class and the scope checks it sets off - the method most likely to be named
+is whichever touches a class that only exists in one process; `instanceof`
+narrowing on `Background.getTemporalEventRegisteredTime()`; `Toybox has
+:Activity` and `Activity` inside the glance. All `Any`-handling is in
+`(:typecheck(false))` functions per the project's convention, and every
+compound null test before arithmetic is split.
+
+- Build plan updated: the architecture diagram's "every 30 min" and the
+  background-storage paragraph

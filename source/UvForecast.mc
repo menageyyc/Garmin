@@ -24,8 +24,8 @@ enum CacheState {
 //
 // The series is stored as a base timestamp plus a fixed step rather than as a
 // parallel array of timestamps. That halves the storage, and it is safe only
-// because UvClient verifies the step is uniform before it ever gets here - an
-// irregular series is a failed fetch, not a degraded mode.
+// because UvFetch.parse() verifies the step is uniform before it ever gets
+// here - an irregular series is a failed fetch, not a degraded mode.
 (:glance)
 class UvForecast {
 
@@ -36,11 +36,13 @@ class UvForecast {
     private const KEY_LAT    = "fla";
     private const KEY_LON    = "flo";
     private const KEY_AT     = "fat";
+    private const KEY_CLEAR  = "fc";
 
     // Missing hours are stored as -1.0 rather than null. Application.Storage
     // round-trips a null inside an array loosely enough that it is not worth
     // relying on, and a negative UV index is impossible, so the sentinel
-    // cannot be mistaken for data. ingest() writes it; valueAt() reads it.
+    // cannot be mistaken for data. UvFetch.parse() writes it; interpolate()
+    // reads it.
 
     // Fetch age is not data age. CAMS runs twice a day, so a refetch two hours
     // later returns the same model run and the same numbers; v1a's two-hour
@@ -52,10 +54,10 @@ class UvForecast {
     private const FRESH_SECONDS = 21600;
     private const USABLE_SECONDS = 43200;
 
-    // The CAMS cell is roughly 40 km, so 25 km is comfortably inside the cell
-    // that was fetched for. Past 100 km it is a different sky and the number
-    // is no longer about where you are.
-    private const NEAR_KM = 25.0;
+    // Past 100 km it is a different sky and the number is no longer about
+    // where you are. Nearer than that, what matters is whether you are still
+    // in the cell the forecast came from - see state(). v1a-v1c used 25 km
+    // for that, which predates knowing the grid.
     private const FAR_KM = 100.0;
 
     private const DEG_TO_RAD = 0.0174532925;
@@ -64,6 +66,9 @@ class UvForecast {
     public var baseEpoch as Number or Null = null;
     public var stepSeconds as Number = 3600;
     public var values as Array or Null = null;
+    // uv_index_clear_sky, the same shape as values. Null for a series
+    // fetched before v1b, or when the response carried none.
+    public var clearValues as Array or Null = null;
     public var gridElevation as Float or Null = null;
     public var lat as Float or Null = null;
     public var lon as Float or Null = null;
@@ -115,12 +120,28 @@ class UvForecast {
     // Consequence for the console: "raw=" no longer equals the JSON value for
     // the hour except at the top of it. That is not a UTC regression.
     public function valueAt(epoch as Number) as Float or Null {
-        var idx = indexAt(epoch);
-        if (idx < 0) {
-            return null;
-        }
         var vals = values;
         if (vals == null) {
+            return null;
+        }
+        return interpolate(vals, epoch);
+    }
+
+    // The clear-sky value for this instant, interpolated the same way. v1b.
+    public function clearAt(epoch as Number) as Float or Null {
+        var vals = clearValues;
+        if (vals == null) {
+            return null;
+        }
+        if (vals.size() != hourCount()) {
+            return null;
+        }
+        return interpolate(vals, epoch);
+    }
+
+    private function interpolate(vals as Array, epoch as Number) as Float or Null {
+        var idx = indexAt(epoch);
+        if (idx < 0) {
             return null;
         }
         var base = baseEpoch;
@@ -202,9 +223,14 @@ class UvForecast {
         return Math.sqrt(dLat * dLat + dLon * dLon).toFloat();
     }
 
-    // Age and distance are judged together, because either alone can be
+    // Age and place are judged together, because either alone can be
     // misleading: a five-minute-old fetch from the last town is not current,
     // and a six-hour-old fetch from right here is still roughly right.
+    //
+    // "Here" means the same CAMS cell (v1b, 2026-09-23). Open-Meteo answers
+    // every position in a cell with that cell's values, so a different cell
+    // is a different forecast however close it is, and the same cell is the
+    // same forecast however far across it you have walked.
     public function state(nowEpoch as Number, curLat as Float or Null, curLon as Float or Null) as Number {
         if (valueAt(nowEpoch) == null) {
             return hasSeries() ? CACHE_EXPIRED : CACHE_ABSENT;
@@ -219,7 +245,7 @@ class UvForecast {
         if (age == null) {
             return CACHE_STALE;
         }
-        if (age <= FRESH_SECONDS && (km == null || km <= NEAR_KM)) {
+        if (age <= FRESH_SECONDS && inFetchedCell(curLat, curLon)) {
             return CACHE_CURRENT;
         }
         if (age <= USABLE_SECONDS) {
@@ -229,59 +255,61 @@ class UvForecast {
     }
 
 
-    // Turns Open-Meteo's hourly block into the stored series, or refuses it.
-    //
-    // The base-plus-step format is only safe if the step really is uniform, so
-    // that is checked across the whole array rather than assumed from the
-    // first two entries. An irregular series is a failed fetch that says so,
-    // not a degraded mode that quietly mis-indexes - if this ever fires, the
-    // endpoint has changed shape and the right response is to find out why.
-    //
-    // Checking is off for the same reason the narrowing helpers have it off:
-    // both arrays arrive as Any out of the JSON parser, and every value that
-    // leaves this function is narrowed before it is stored.
-    (:typecheck(false))
-    public function ingest(times, rawValues, fetchLat, fetchLon, nowEpoch) as Lang.Boolean {
-        var n = times.size();
-        if (n < 2 || rawValues.size() != n) {
-            return false;
+    // Unknown counts as the same cell, as unknown distance always did: with
+    // no position to compare, age alone decides.
+    private function inFetchedCell(curLat as Float or Null, curLon as Float or Null) as Boolean {
+        var a = curLat;
+        if (a == null) {
+            return true;
         }
+        var b = curLon;
+        if (b == null) {
+            return true;
+        }
+        var fa = lat;
+        if (fa == null) {
+            return true;
+        }
+        var fb = lon;
+        if (fb == null) {
+            return true;
+        }
+        return UvCell.sameCell(a, b, fa, fb);
+    }
 
-        var first = UvNum.asNumber(times[0]);
-        var second = UvNum.asNumber(times[1]);
-        if (first == null || second == null) {
+    // Takes a series UvFetch.parse() has already accepted - from the
+    // foreground client, or from the background service's payload, which
+    // carries the same keys. Returns false and changes nothing if the pieces
+    // are not there.
+    //
+    // Checking is off because the parsed dictionary hands back Any; each
+    // value is narrowed before it is kept.
+    (:typecheck(false))
+    public function adopt(parsed, fetchLat, fetchLon, nowEpoch) as Lang.Boolean {
+        if (!(parsed instanceof Lang.Dictionary)) {
             return false;
         }
-        var step = second - first;
+        var base = UvNum.asNumber(parsed.get(UvFetch.P_BASE));
+        var step = UvNum.asNumber(parsed.get(UvFetch.P_STEP));
+        var vals = UvNum.asArray(parsed.get(UvFetch.P_UV));
+        if (base == null || step == null || vals == null) {
+            return false;
+        }
         if (step <= 0) {
             return false;
         }
-
-        var prev = second;
-        for (var i = 2; i < n; i += 1) {
-            var t = UvNum.asNumber(times[i]);
-            if (t == null || t - prev != step) {
-                return false;
-            }
-            prev = t;
+        var clear = UvNum.asArray(parsed.get(UvFetch.P_CLEAR));
+        if (clear != null && clear.size() != vals.size()) {
+            clear = null;
         }
 
-        var out = [];
-        for (var j = 0; j < n; j += 1) {
-            var v = UvNum.asFloat(rawValues[j]);
-            if (v == null || v < 0.0) {
-                out.add(-1.0);
-            } else {
-                out.add(v);
-            }
-        }
-
-        baseEpoch = first;
+        baseEpoch = base;
         stepSeconds = step;
-        values = out;
-        lat = fetchLat;
-        lon = fetchLon;
-        fetchedAt = nowEpoch;
+        values = vals;
+        clearValues = clear;
+        lat = UvNum.asFloat(fetchLat);
+        lon = UvNum.asFloat(fetchLon);
+        fetchedAt = UvNum.asNumber(nowEpoch);
         return true;
     }
 
@@ -292,6 +320,7 @@ class UvForecast {
         lon           = UvNum.asFloat(Application.Storage.getValue(KEY_LON));
         fetchedAt     = UvNum.asNumber(Application.Storage.getValue(KEY_AT));
         values        = UvNum.asArray(Application.Storage.getValue(KEY_VALUES));
+        clearValues   = UvNum.asArray(Application.Storage.getValue(KEY_CLEAR));
 
         // Two single tests rather than one compound ternary. A combined
         // condition does not narrow reliably in this checker, and "step is
@@ -315,13 +344,15 @@ class UvForecast {
         putValues();
     }
 
-    // Isolated so the type suppression covers this one call and nothing else.
-    // Storage.setValue takes Application.PropertyValueType; the series is held
-    // as a bare Lang.Array because that is what comes back out of storage, and
-    // the two spellings do not necessarily satisfy the checker even though the
-    // runtime accepts them. Six other setValue calls above keep their checking.
+    // Isolated so the type suppression covers these two calls and nothing
+    // else. Storage.setValue takes Application.PropertyValueType; the series
+    // is held as a bare Lang.Array because that is what comes back out of
+    // storage, and the two spellings do not necessarily satisfy the checker
+    // even though the runtime accepts them. Six other setValue calls above
+    // keep their checking.
     (:typecheck(false))
     private function putValues() as Void {
         Application.Storage.setValue(KEY_VALUES, values);
+        Application.Storage.setValue(KEY_CLEAR, clearValues);
     }
 }

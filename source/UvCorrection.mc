@@ -15,10 +15,9 @@ import Toybox.Lang;
 // not by how much ground you can see), so the surface now carries its own
 // increment directly.
 //
-// Pure arithmetic, no I/O, no state. (:glance) only for now - v1b adds
-// (:background) here together with the service and the manifest permission,
-// because any (:background) in the project makes it a background application
-// and the build then fails until the permission is declared.
+// Pure arithmetic, no I/O, no state. (:glance) only, and deliberately not
+// (:background): the service hands back the raw API series and the correction
+// happens on the watch, so the background never needs this (v1b, 2026-09-23).
 (:glance)
 module UvCorrection {
 

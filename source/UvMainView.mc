@@ -3,6 +3,7 @@ import Toybox.WatchUi;
 import Toybox.Graphics;
 import Toybox.System;
 import Toybox.Time;
+import Toybox.Application;
 
 // Two pages. The first is the answer; the second is why you should believe it.
 //
@@ -36,6 +37,12 @@ class UvMainView extends WatchUi.View {
     // just clear it. Percentages are rounded, not truncated - see UvCorrection.
     private const MIN_SHOWN_PERCENT = 2;
 
+    // The clear-sky line shows only when a clear sky would read at least this
+    // much higher than the forecast (v1b, decision 4). Below it the two
+    // numbers are the same to one decimal and inside the model's own spread,
+    // so the line would be noise - on a clear day, and at night, it is hidden.
+    private const CLEAR_MARGIN = 0.5;
+
     private var _client as UvClient or Null = null;
     private var _page as Number = 0;
 
@@ -50,14 +57,18 @@ class UvMainView extends WatchUi.View {
     //
     // Position and altitude are read first, from what the system already
     // holds. In v1a they were read only when a fetch started, so "have you
-    // moved?" compared the fetch position with itself and never fired. They
-    // are not persisted here; a fetch persists what it used.
+    // moved?" compared the fetch position with itself and never fired.
+    //
+    // Since v1b they are also persisted here, not only by a fetch: the
+    // background service fetches for the position in storage, and that
+    // should be where the watch last was, not where it last fetched.
     function onShow() as Void {
         UvSense.sampleAltitude();
         UvSense.sampleCachedFix();
         UvSettings.expireSurface();
 
         var state = UvState.get();
+        state.savePosition();
         if (state.cacheState() != CACHE_CURRENT) {
             refetch();
         }
@@ -251,6 +262,25 @@ class UvMainView extends WatchUi.View {
             tints.add(Graphics.COLOR_WHITE);
         }
 
+        // The ceiling if the forecast cloud does not turn up, corrected the
+        // same way as the big number. CAMS's cloud at 40 km over mountains is
+        // the largest error in the whole chain, and it fails in the dangerous
+        // direction: forecast overcast, actual bluebird (review finding 11).
+        // Tinted by the band it would reach, so "could be HIGH" reads at a
+        // glance.
+        // Nested single tests: both values are used in arithmetic, and a
+        // combined null test does not narrow the second one.
+        var clear = state.effectiveClearNow();
+        if (uv != null) {
+            if (clear != null) {
+                if (clear - uv >= CLEAR_MARGIN) {
+                    lines.add("up to " + clear.format("%.1f") + " if sky clears");
+                    tints.add(state.cacheState() == CACHE_EXPIRED
+                              ? Graphics.COLOR_LT_GRAY : UvScale.colour(clear));
+                }
+            }
+        }
+
         // A percentage under 2% is not printed - it is inside the model's own
         // error bars. But the surface NAME is always printed: on the hill with
         // the surface never set, "the app thinks you are on grass" is the one
@@ -326,10 +356,38 @@ class UvMainView extends WatchUi.View {
         lines.add(UvSettings.describe());
         tints.add(Graphics.COLOR_LT_GRAY);
 
+        var bgError = backgroundError();
+        lines.add(backgroundText(bgError));
+        tints.add(bgError == null ? Graphics.COLOR_LT_GRAY : Graphics.COLOR_ORANGE);
+
         lines.add(statusText(state));
         tints.add(statusTint(state));
 
         drawStack(dc, w, h, top + dc.getFontHeight(Graphics.FONT_XTINY), lines, tints);
+    }
+
+    // The background service's last result. Nothing else on the watch shows
+    // whether it is running at all, and on a real watch that is the first
+    // question (v1b). "bg" rather than "background" to fit the chord.
+    private function backgroundText(error as String or Null) as String {
+        var at = UvNum.asNumber(Application.Storage.getValue(UvFetch.KEY_BG_AT));
+        if (at == null) {
+            return "bg: not run yet";
+        }
+        var ago = UvSense.ageText(nowEpoch() - at);
+        if (error != null) {
+            return "bg " + ago + ": " + error;
+        }
+        return "bg OK " + ago + " ago";
+    }
+
+    (:typecheck(false))
+    private function backgroundError() as Lang.String or Null {
+        var e = Application.Storage.getValue(UvFetch.KEY_BG_ERROR);
+        if (e instanceof Lang.String) {
+            return e;
+        }
+        return null;
     }
 
     // The settings page exists so the picker is reachable without MENU. It

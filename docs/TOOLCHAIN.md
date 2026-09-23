@@ -663,3 +663,115 @@ on grass, where earlier builds printed `surface=1%`.
 not taken: that is the old truncation (+2% computed as 1.9999, shown as 1,
 then hidden). Report it.
 
+
+---
+
+## Testing v1b
+
+v1b adds a background service: every three hours, even with the app closed, it
+fetches the forecast for wherever the watch last was and hands it to the app or
+the glance. It also adds the clear-sky ceiling, and a line on the diagnostics
+page saying what the background service last did.
+
+**Pull, stop any debug session, F5.** This is the build most likely to fail
+to compile since v1a: it is the first with background code, and the
+compiler's scope rules for that are strict. **Paste every error exactly**;
+there is no need to fix anything. The places most likely to draw one:
+
+- `UvGuardApp.mc`, the `(:background :glance)` line on the class
+- a "not available in background" or "cannot find symbol" error naming
+  `UvState`, `UvMainView`, `UvGlanceView` or `WatchUi`: a scope problem,
+  small to fix
+- `UvGlanceView.mc`, `Toybox has :Activity` or `Activity.getActivityInfo()`
+  inside the glance
+
+**Stale-binary tell:** the diagnostics page (DOWN once) has a new line
+starting `bg`. No `bg` line means the old build is running.
+
+### 1. The foreground still works
+
+Set Position `51.115, -115.763` (Sunshine base), START. The `UV OK` line now
+carries a `clr=` value - the clear-sky UV for the same hour:
+
+```
+UV OK raw=... hr=... eff=... clr=... cell=51.20,-115.60 resp=... cellElev=pending ...
+GET https://api.open-meteo.com/v1/elevation cell=51.20,-115.60 points=49
+Cell height 2060 m from 49/49 points, cell=51.20,-115.60 alt=-15%
+```
+
+- **One fresh elevation request is expected here**, even though this cell
+  was measured last time. The remembered heights are now stored in a new
+  format (several cells instead of one), so each cell is measured once more
+  after this build, then never again. `2060 m` again confirms the same box
+- `clr=` is equal to or above `raw=`. Under a clear forecast they are about
+  the same; under a cloudy one `clr` is higher
+- **The reading page** shows a new line, `up to 4.2 if sky clears`, only
+  when a clear sky would read at least 0.5 higher than the big number. On a
+  clear forecast, or at night, there is no such line and that is correct.
+  If `clr=` in the console is well above `raw=` (0.5 or more) and the line
+  is **not** on the reading page, report it
+
+### 2. The remembered cells
+
+Set Position `51.045, -114.070` (Calgary), START. One elevation request (its
+first in the new format, as above; `1101 m`). Then Sunshine base, START, and
+Calgary again, START.
+
+- **No** `GET .../elevation` on either of those last two. Both cells are
+  remembered now; the last test re-measured Calgary on the way back
+
+### 3. The background service
+
+Leave the app open on the reading page. In the simulator's menu bar,
+**Simulation -> Background Events -> Temporal Event** (the menu names are from
+memory - if they differ, look for "Background" or "Temporal" and tell me what
+you found). That runs the service once, now, instead of in three hours.
+
+The console should show:
+
+```
+BG GET https://air-quality-api.open-meteo.com/v1/air-quality lat=51.0450 lon=-114.0700
+BG UV OK cell=51.20,-114.00 height=1101 m mem=12/32 kB
+BG delivered: 48 h, cell 51.20,-114.00 height 1101 m clear yes
+```
+
+Calgary, because that is where step 2 left the watch: the service fetches for
+the last position the app saw.
+
+- **`mem=12/32 kB`** - placeholder numbers, not a prediction. **This is the
+  number that matters most in the whole test.** The second figure is the
+  background memory budget on this watch, which has never been measured;
+  the first is how much this run is using. Copy it exactly
+- `BG delivered` means the app took delivery and saved it
+- The diagnostics page's `bg` line then reads `bg OK 0 s ago` (or a few
+  seconds)
+- `bg: not run yet` after triggering means nothing reached the app - report it
+- `bg ...: HTTP -104` or similar in orange is a failed fetch; report the line
+- If nothing at all appears in the console after triggering, report that
+  too: the service did not run
+
+### 4. The glance takes delivery (open question 16)
+
+**Settings -> Glance Launch Mode**, and pick the glance option (the opposite
+of the usual "Launch in Normal Mode"), F5, and trigger the temporal event again while the glance
+is showing.
+
+- A `BG delivered` line with the glance on screen **answers question 16**:
+  the glance can take delivery on its own, so it stays current without the
+  app ever being opened
+- No `BG delivered` line: report it. The data should then arrive the next
+  time the app opens
+
+Put Glance Launch Mode back to **Launch in Normal Mode** afterwards.
+
+### 5. Optional: the UV grid check (one minute)
+
+Proves that the UV value comes from the 0.4 degree cell the app computes, not
+the 0.1 degree one. **Do this within the same clock hour as a Sunshine fetch**
+(the `idx=` must match), or the values legitimately differ.
+
+1. Set Position `51.115, -115.763`, START. Note `hr=` and `idx=`
+2. Set Position `51.300, -115.450`, START. Same `cell=51.20,-115.60`, but a
+   different `resp=` (a different 0.1 degree cell)
+3. **Identical `hr=` confirms it.** A different `hr=` at the same `idx=`
+   means the UV comes from the smaller grid after all - report both lines

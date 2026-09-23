@@ -30,20 +30,13 @@ import Toybox.Timer;
 //
 // timeformat=unixtime keeps the payload small. ISO timestamps roughly double
 // the size of the time array for no benefit on-device. Payload size is the
-// usual cause of death for a Connect IQ background fetch, and v1b moves this
-// request into a background process with roughly 32 KB to work in, so the
-// habit is not optional.
+// usual cause of death for a Connect IQ background fetch, and since v1b the
+// same request also runs in the background service, whose budget is the
+// tightest in the project.
+//
+// This is the foreground half. The request and the parser are shared with the
+// background service through UvFetch, so the two cannot drift apart (v1b).
 class UvClient {
-
-    private const BASE_URL = "https://air-quality-api.open-meteo.com/v1/air-quality";
-    private const ELEVATION_URL = "https://api.open-meteo.com/v1/elevation";
-
-    // Two days, not one. forecast_days=1 returns the current UTC day, which
-    // in Calgary cuts at 18:00 local - fine for "what is it now", useless for
-    // a cache that has to survive an evening with no phone. The second day
-    // costs about 500 bytes on the wire and is what v3's forward-looking curve
-    // will read anyway.
-    private const FORECAST_DAYS = "2";
 
     // A one-shot acquisition that never completes used to leave requestInFlight
     // true forever: the screen sat on "..." with no error, indistinguishable
@@ -203,29 +196,15 @@ class UvClient {
         // an altitude to correct with even when every fetch today has failed.
         state.savePosition();
 
-        var params = {
-            "latitude"      => lat.format("%.4f"),
-            "longitude"     => lon.format("%.4f"),
-            "hourly"        => "uv_index",
-            "forecast_days" => FORECAST_DAYS,
-            "timeformat"    => "unixtime"
-        };
-
         // No elevation parameter. elevation=nan was tried in v1c and returns
         // no elevation at all on this endpoint, because Open-Meteo holds no
-        // terrain heights for CAMS. It is not a documented parameter of the
-        // air-quality API either. The cell height comes from
+        // terrain heights for CAMS. The cell height comes from
         // requestCellHeight() instead.
-
-        var options = {
-            :method       => Communications.HTTP_REQUEST_METHOD_GET,
-            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
-        };
-
-        System.println("GET " + BASE_URL + " lat=" + lat.format("%.4f")
+        System.println("GET " + UvFetch.UV_URL + " lat=" + lat.format("%.4f")
                        + " lon=" + lon.format("%.4f")
-                       + " days=" + FORECAST_DAYS);
-        Communications.makeWebRequest(BASE_URL, params, options, method(:onResponse));
+                       + " days=" + UvFetch.FORECAST_DAYS);
+        Communications.makeWebRequest(UvFetch.UV_URL, UvFetch.uvParams(lat, lon),
+                                      UvFetch.jsonOptions(), method(:onResponse));
     }
 
     public function onResponse(code as Number, data as Dictionary or String or Null) as Void {
@@ -245,23 +224,18 @@ class UvClient {
             return;
         }
 
-        var hourly = data.get("hourly");
-        if (!(hourly instanceof Dictionary)) {
-            fail(code, "No hourly block");
-            return;
-        }
-
-        var times = hourly.get("time");
-        var series = hourly.get("uv_index");
-        if (!(times instanceof Array) || !(series instanceof Array)) {
-            fail(code, "No UV series");
+        // parse() returns the series, or a String saying why not. toString()
+        // hands fail() a String whether or not the checker narrows the union.
+        var parsed = UvFetch.parse(data);
+        if (parsed instanceof String) {
+            fail(code, parsed.toString());
             return;
         }
 
         var now = Time.now().value();
         var forecast = state.forecast;
 
-        if (!forecast.ingest(times, series, state.latitude, state.longitude, now)) {
+        if (!forecast.adopt(parsed, state.latitude, state.longitude, now)) {
             fail(code, "Irregular series");
             return;
         }
@@ -271,14 +245,14 @@ class UvClient {
         // the series was fetched for, by the same nearest-point rounding
         // Open-Meteo uses - NOT from the response's "latitude"/"longitude",
         // which name the 0.1 degree greenhouse-gas grid mixed into the same
-        // request (see UvCell.cellLat). UvCell keeps the height of the last
-        // cell it measured. Same cell: use it now. New cell: no baseline
+        // request (see UvCell.cellLat). UvCell keeps the heights of the last
+        // four cells it measured. Known cell: use it now. New cell: no baseline
         // until requestCellHeight() comes back,
         // so for a second or two the correction is off and diagnostics says
         // "no grid". That is an under-report, the safe direction, and far
         // better than pairing a new cell's forecast with an old cell's height.
         //
-        // Assigned only after ingest has accepted the series, for the same
+        // Assigned only after adopt has accepted the series, for the same
         // reason: a refused fetch must not leave the old series carrying a
         // new cell's height.
         //
@@ -338,9 +312,11 @@ class UvClient {
         var raw = state.rawNow();
         var hour = forecast.stepValueAt(now);
         var eff = state.effectiveNow();
+        var clear = forecast.clearAt(now);
         System.println("UV OK raw=" + (raw == null ? "none" : raw.format("%.2f"))
                        + " hr=" + (hour == null ? "none" : hour.format("%.2f"))
                        + " eff=" + (eff == null ? "none" : eff.format("%.2f"))
+                       + " clr=" + (clear == null ? "none" : clear.format("%.2f"))
                        + " cell=" + cellText
                        + " resp=" + (respLat == null ? "?" : respLat.format("%.2f"))
                        + "," + (respLon == null ? "?" : respLon.format("%.2f"))
@@ -372,18 +348,10 @@ class UvClient {
             return;
         }
 
-        var params = {
-            "latitude"  => UvCell.latitudes(lat, lon),
-            "longitude" => UvCell.longitudes(lat, lon)
-        };
-        var options = {
-            :method       => Communications.HTTP_REQUEST_METHOD_GET,
-            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
-        };
-
-        System.println("GET " + ELEVATION_URL + " cell=" + lat.format("%.2f") + ","
+        System.println("GET " + UvCell.ELEVATION_URL + " cell=" + lat.format("%.2f") + ","
                        + lon.format("%.2f") + " points=" + UvCell.pointCount().toString());
-        Communications.makeWebRequest(ELEVATION_URL, params, options, method(:onCellHeight));
+        Communications.makeWebRequest(UvCell.ELEVATION_URL, UvCell.heightParams(lat, lon),
+                                      UvFetch.jsonOptions(), method(:onCellHeight));
     }
 
     public function onCellHeight(code as Number, data as Dictionary or String or Null) as Void {
