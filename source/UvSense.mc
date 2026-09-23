@@ -54,10 +54,11 @@ module UvSense {
     // strength of a missing field rather than evidence the fix is wrong.
     function sampleCachedFix() as Boolean {
         var state = UvState.get();
+        // No null test on info: the SDK declares getInfo() as always returning
+        // a Position.Info, and the compiler flagged a test against null as
+        // unreachable code (2026-09-23). What can be missing is the position
+        // inside it, which is tested below.
         var info = Position.getInfo();
-        if (info == null) {
-            return false;
-        }
         var cached = info.position;
         if (cached == null) {
             return false;

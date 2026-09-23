@@ -13,27 +13,19 @@ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
 **v0 AND v1a ARE BOTH COMPLETE AND CONFIRMED RUNNING** in the simulator on
 2026-09-22.
 
-**UPDATED 2026-09-23 (latest session): the cell-height fix is WRITTEN, NOT
-COMPILED.** v1c built and ran, but `elevation=nan` returned no elevation at
-all, so the altitude correction had no baseline. Cause, from Open-Meteo's own
-source: it stores **no terrain heights for CAMS**. The app now computes the
-cell height itself - the mean of 49 terrain heights across the CAMS cell, from
-Open-Meteo's Elevation API, once per cell (`UvCell.mc`). **The cell-height test ran
-the same day and passed what it was asked**, but showed the response's
-coordinates name a 0.1 degree greenhouse-gas cell, not the 0.4 degree UV cell.
-**Fixed (the app now computes the cell itself), NOT YET COMPILED.**
-Question 25's figures are written and confirmed on screen.
+**UPDATED 2026-09-23 (latest session): v1c IS CLOSED. The cell height is
+CONFIRMED WORKING** in the simulator: the app computes the 0.4 degree UV cell
+from its own position (`cell=51.20,-115.60` at both Sunshine positions,
+`51.20,-114.00` at Calgary, exactly as predicted), averages 49 Elevation API
+heights across it (2,060 m and 1,101 m), and caches it. The one Problems-panel
+item was an unreachable null test in `UvSense.mc`, removed (**that one-line
+change is not yet compiled**; the next build confirms it). Question 25's figures
+are confirmed on screen.
 
-**Next session, in this order:**
-1. Matt re-runs "Testing the cell height" (TOOLCHAIN.md) and pastes the
-   `UV OK`, `GET` and `Cell height` lines. Expected: `cell=51.20,-115.60
-   resp=51.10,-115.80` at both Sunshine positions, `cell=51.20,-114.00
-   resp=51.00,-114.10` at Calgary, a fresh elevation request at the first
-   Sunshine fetch, `alt=-15%` there. Matt also reports the one item in VS
-   Code's Problems panel (unread so far)
-2. Then v1b. Fold in: the background service needs the cell height too and
-   cannot write storage; the build plan's "every 30 min" refresh is wrong
-   (CAMS updates twice a day)
+**Next session: v1b design, then v1b.** The design and the decisions it needs
+from Matt are in the last session log entry. **Read its "Storage writes from
+the background" finding first** - it corrects a fact this file has treated as
+settled since 2026-09-22.
 
 See the last session log entry.
 
@@ -41,17 +33,19 @@ The v1c-before-v1b order was not optional: the review showed v1a's position,
 altitude and freshness logic is what v1b would be built on, and it was wrong.
 
 1. **v1c** - the correction pass from `docs/REVIEW-v1a-findings.md`. Built
-   and running 2026-09-23. The cell-height follow-up (`UvCell.mc`) needs its
-   first compile and the test in "Testing the cell height", TOOLCHAIN.md.
+   and running 2026-09-23; cell height confirmed the same day. **Closed.**
 2. **v1b** - the background service, the cached refresh, and the glance
    rewrite. **Read the 2026-09-22 session log entry on the background
-   architecture before starting it.** Three platform facts established that day
-   contradict the build plan's original architecture diagram: a background
-   service cannot write storage, `onBackgroundData()` fires in the glance too,
-   and GPS from a background process is unreliable. The build plan has been
-   corrected; the diagram in it is now right. **The diagram's "every 30 min"
-   is now also wrong** (CAMS updates twice a day - review finding 7) and is to
-   be corrected when v1b is designed.
+   architecture before starting it, and then the last entry in this file,
+   which corrects one of its three facts.** Established 2026-09-22:
+   `onBackgroundData()` fires in the glance too, and GPS from a background
+   process is unreliable. Also stated then, and **wrong as stated**: "a
+   background service cannot write storage". Garmin's Storage documentation
+   says background processes can write `Application.Storage` from API 3.2
+   (epix Pro is 5.2). `Application.Properties` still cannot be written from
+   the background. Whether v1b uses that is a design decision, not yet made.
+   **The diagram's "every 30 min" is also wrong** (CAMS updates twice a day
+   - review finding 7) and is to be corrected when v1b is designed.
 
 **What v1a proved, live:** three pages with a page indicator, on-watch settings
 pickers, `HTTP 200`, `idx 15/48` (so `forecast_days=2` took), correct grid
@@ -148,7 +142,7 @@ pushing elsewhere means he never receives the work.
 
 ## Current phase
 
-**v1a COMPLETE.** Builds clean and runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
+**v1a and v1c COMPLETE** (v1c closed 2026-09-23). Builds clean and runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
 (5.2.0). The reading page shows UV corrected for altitude and surface with the
 API's own figure beneath it; the hourly series is cached with the time and
 place it was fetched for, so a failed fetch degrades to "two hours old" rather
@@ -167,18 +161,12 @@ distance check can never fire, and a real watch's cached fix is of unknown age.
 two session log entries). v1b waits for v1c, because findings 3, 4, 7 and 10
 change what v1b is built on.
 
-Next action, in order:
-1. **Re-run the cell-height test** (TOOLCHAIN.md, "Testing the cell
-   height") on the build that computes the cell itself. Expected
-   `cell=51.20,-115.60` at both Sunshine positions and `51.20,-114.00` at
-   Calgary
-2. ~~Question 25 figures~~ **Done 2026-09-23:** grass 0, water +1%, concrete
-   +2%, sand +3%, approved by Matt and written, with a rounding fix for the
-   on-screen percentages. Compiles with step 1
-3. Then v1b. Notes for its design: the cell-height request is a second network
-   call the background service must either make or leave to the foreground,
-   and it cannot write storage; the build plan's "every 30 min" refresh is
-   wrong because CAMS updates twice a day
+**2026-09-23: v1c closed.** The cell-height re-test passed on every point
+(see the last session log entry). Question 25's figures are on screen.
+
+Next action: **v1b design.** The proposal and the decisions it needs from Matt
+are in the last session log entry. No v1b code is written until he has
+answered them.
 
 ---
 
@@ -204,7 +192,7 @@ Next action, in order:
 | 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
-| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A). **Tested 2026-09-23:** `pointElev=1687 m` and `2192 m` at the two Sunshine positions (real ~1,660 / ~2,160 m), so the default field IS the point terrain height - finding 1 confirmed. The mean works (49/49 points, 1,993 m); the response's coordinates turned out to name the wrong grid, and the cell is now computed on the watch |
+| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A). **Tested 2026-09-23:** `pointElev=1687 m` and `2192 m` at the two Sunshine positions (real ~1,660 / ~2,160 m), so the default field IS the point terrain height - finding 1 confirmed. The mean works (49/49 points, 1,993 m); the response's coordinates turned out to name the wrong grid, and the cell is now computed on the watch. **Re-tested 2026-09-23 on the computed cell: passed** - `51.20,-115.60` at both Sunshine positions (2,060 m), `51.20,-114.00` at Calgary (1,101 m), cache hit at the second Sunshine position |
 | 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | **Answered 2026-09-23: dropped** |
 | 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
 | 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | **Answered 2026-09-23: one decimal.** Already what v1c does |
@@ -246,7 +234,7 @@ Next action, in order:
 | 2026-09-22 | Open-Meteo air-quality endpoint confirmed as the data source | Live `HTTP 200` with a correct grid elevation. No need for the GFS fallback; `BASE_URL` stays as it is |
 | 2026-09-22 | Poor GPS quality is logged, not gated on; 0,0 is a hard fail | A last-known fix is fine for a 40 km grid cell. 0,0 is the only case that silently misleads, because Open-Meteo answers for Null Island with a plausible tropical UV over HTTP 200 |
 | 2026-09-22 | v1 split into v1a (foreground) and v1b (background + glance) | Adding `(:background)` scoping to the app class is the same class of bug as the glance scoping problem that bit v0. Isolating it means a compile failure names itself instead of hiding in 600 new lines |
-| 2026-09-22 | The background service returns data via `Background.exit()`, never by writing storage | A background process gets its own snapshot of the object store, and cannot write Application Properties at all. This **corrects the build plan's architecture diagram**, which draws the service writing to storage directly |
+| 2026-09-22 | The background service returns data via `Background.exit()`, never by writing storage | A background process gets its own snapshot of the object store, and cannot write Application Properties at all. This **corrects the build plan's architecture diagram**, which draws the service writing to storage directly. **UNDER REVIEW 2026-09-23:** the Properties half holds, but Garmin's Storage docs say a background process CAN write `Application.Storage` from API 3.2, with `onStorageChanged()` to tell the other process. The channel choice is reopened as a v1b design decision; see that day's last log entry |
 | 2026-09-22 | The background service reads the last-known position from storage; the foreground writes it | `Position` calls from a background process are reported to fail with permission errors. A 40 km grid cell does not need a fresh fix, and never powering the GPS from the background is also the right battery answer |
 | 2026-09-22 | `forecast_days=2`, not 1 | `forecast_days=1` returns the current UTC day, which cuts at 18:00 local in Calgary. About 500 extra bytes buys a cache that survives an evening with no phone, and v3's forward curve needs it anyway |
 | 2026-09-22 | A failed fetch leaves the cached reading on screen, marked stale | v0 cleared the reading on every attempt because its only job was exercising the pipe. An app that blanks the moment the phone wanders out of range is worse than one that says "two hours old" |
@@ -304,7 +292,7 @@ Next action, in order:
 | Concluding the app is broken because the simulator shows `--` and does nothing | The simulator launches the glance by default, and the glance never fetches by design. Settings > Glance Launch Mode > Launch in Normal Mode |
 | Gating the fetch on `!hasReading()` | uvIndex is persisted, so one success permanently stopped the app calling the API |
 | Failing the fetch on `QUALITY_NOT_AVAILABLE` | Would block the simulator test for no safety gain. The 0,0 guard is what actually prevents a false positive |
-| Writing the forecast to storage from the background service | A background process gets its own snapshot of the object store; writes back are unreliable, and Application Properties cannot be written from the background at all. `Background.exit()` is the supported channel, capped near 8 kB |
+| Writing the forecast to storage from the background service | A background process gets its own snapshot of the object store; writes back are unreliable, and Application Properties cannot be written from the background at all. `Background.exit()` is the supported channel, capped near 8 kB. **Reason partly wrong (2026-09-23):** Storage writes from the background are documented as supported from API 3.2. Still not the recommended channel for v1b (one writer per key; a reported per-device bug), but for a different reason than the one given here |
 | Calling `Position.getInfo()` inside the background service | Reported to fail with permission and invocation errors from a background process. The foreground writes the last-known fix to storage and the background reads it |
 | Storing parallel arrays of timestamps and values | Doubles the storage for a series that is uniformly hourly. Base plus step, with uniformity verified at parse time, costs nothing and cannot drift |
 | Loading the setting labels through `Rez` in the glance | A `loadResource` call per draw inside a ~60 kB budget, returning a `Resource` the strict checker will not pass to a `String` parameter. Nine short English strings are cheaper, duplicated deliberately in `settings.xml` |
@@ -1427,3 +1415,147 @@ no longer matches and is replaced on the first fetch - no migration needed.
 
 Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
 
+### 2026-09-23 - Cell height CONFIRMED. v1c closed. v1b designed, awaiting decisions
+- Matt pulled `952b724`, ran "Testing the cell height" and pasted the console.
+  He started at Calgary (where the simulator was left), so the order was
+  Calgary, Sunshine base, Sunshine Village, Calgary again.
+
+```
+UV OK raw=0.88 hr=0.50 eff=0.88 cell=51.20,-114.00 resp=51.00,-114.10 cellElev=pending pointElev=1061 m idx=15/48 slot+2125s alt=0% surface=0%
+GET https://api.open-meteo.com/v1/elevation cell=51.20,-114.00 points=49
+Cell height 1101 m from 49/49 points, cell=51.20,-114.00 alt=-11%
+UV OK raw=0.88 hr=0.45 eff=0.88 cell=51.20,-115.60 resp=51.10,-115.80 cellElev=pending pointElev=1687 m idx=15/48 slot+2223s alt=0% surface=0%
+GET https://api.open-meteo.com/v1/elevation cell=51.20,-115.60 points=49
+Cell height 2060 m from 49/49 points, cell=51.20,-115.60 alt=-15%
+UV OK raw=0.90 hr=0.45 eff=0.76 cell=51.20,-115.60 resp=51.10,-115.80 cellElev=2060 m pointElev=2192 m idx=15/48 slot+2292s alt=-15% surface=0%
+UV OK raw=0.92 hr=0.50 eff=0.92 cell=51.20,-114.00 resp=51.00,-114.10 ...
+```
+
+(The last line is abbreviated here; it matched the first Calgary fetch,
+including a fresh elevation request and `Cell height 1101 m`.)
+
+**Every expectation met:**
+- `cell=` is the 0.4 degree UV cell at all three positions, exactly as
+  predicted; `resp=` is the 0.1 degree greenhouse cell, exactly as in the
+  first run. The response's coordinates are logged and never used
+- The first Sunshine fetch made a fresh elevation request (the stored height
+  belonged to the wrong box); the second Sunshine position made none and
+  showed `cellElev=2060 m` straight away - the cache works
+- `alt=-15%` at Sunshine is the -1,500 m floor (-18 m against 2,060 m)
+- `alt=-11%` at Calgary: -18 m against 1,101 m is -11.2%
+- `eff=0.76` at Sunshine Village is `0.90 x 0.85`, the floor applied
+- 49/49 points usable every time
+- The correct cells are a little different from the first build's wrong
+  boxes: Sunshine 2,060 m (was 1,993), Calgary 1,101 m (was 1,117)
+
+**Also shown for the first time: the hour interpolation on a non-zero
+series.** 15:00 UTC is 09:00 in Calgary. `hr=0.50` is the 15:00 value and
+`raw=0.88` at 59% of the way through the hour implies about 1.14 at 16:00 -
+a plausible September morning rise. All four `raw` values imply the same next
+hour (about 1.14-1.16) within the two-decimal rounding of the log.
+
+**Found, not a fault:** returning to Calgary re-requested its height, because
+`UvCell` remembers one cell only. v1b widens that cache (below).
+
+**Not proven by this test, for the record:** that the UV value comes from the
+0.4 degree cell rather than the 0.1 degree one. Both Sunshine positions share
+both cells, so their identical `hr=0.45` cannot tell the two apart. The
+source-code reading is the evidence. An optional one-minute test: Set Position
+`51.300, -115.450` (same 0.4 degree cell as Sunshine, different 0.1 degree
+cell) in the same UTC hour as a Sunshine fetch. Identical `hr=` confirms it.
+
+**The Problems-panel item:** `UvSense.mc` line 59, "Statement is not
+reachable" - the `return false` after `if (info == null)`. The SDK declares
+`Position.getInfo()` as always returning a `Position.Info`, so the compiler
+knows the test can never be true. Removed, with a comment saying why. The
+position inside the info can still be null and is still tested.
+**Not yet compiled** - the next build confirms it.
+
+**Storage writes from the background: a settled fact was wrong as stated.**
+Found while researching v1b. Two separate searches return the same passage from
+Garmin's Storage documentation (the page itself is blocked from this sandbox): *API
+level 3.2.0 introduced the ability to access the Storage module from
+background processes. The background process can modify storage using
+`setValue()`, `deleteValue()` and `clearValues()`. When the storage is
+written from the background process, `AppBase.onStorageChanged()` is invoked
+for the foreground process if both are active at the same time, and vice
+versa.* epix Pro is API 5.2. So "a background service cannot write storage"
+(2026-09-22) is wrong for `Application.Storage` on this watch. It still holds
+for `Application.Properties`. There is also a forum bug report of one device
+(titled "F5", probably a fenix 5) failing to save from the background while others
+succeed - unread here, the forum is blocked. The decision and rejected-
+approach rows are marked; the choice of channel is decision 3 below.
+
+**v1b design - what it does**
+
+1. **Manifest and scopes, in one change** (per CLAUDE.md): the Background
+   permission, `(:background)` on the app class, a new service delegate,
+   `UvNum`, `UvCell`, and one shared parser.
+2. **A background service** (`UvBackground`, a `ServiceDelegate`) woken by a
+   repeating temporal event. It reads the last position from Storage
+   (the foreground writes it), fetches the UV series, and returns it.
+   `getServiceDelegate()` returns an array, or the simulator's manual trigger
+   never calls it (established 2026-09-22).
+3. **One parser for both paths.** `UvForecast.ingest()` lives in a glance
+   class; the background should not carry the whole class. The uniform-step
+   check and the -1 sentinel move into a small `(:background)` module that the
+   foreground client and the service both call.
+4. **`onBackgroundData()` in both the app and the glance** takes delivery,
+   writes the series, and redraws. Only foreground processes write the
+   forecast keys, so there is one writer per key.
+5. **Position persisted on every `onShow()`**, not only when a fetch
+   starts, so the background fetches for where the watch last *was*, not
+   where it last *fetched* (review finding 3, its v1b note).
+6. **Diagnostics shows the last background result**: when, and the HTTP
+   code if it failed. The real-watch test needs it, because nothing else
+   will show whether the service is running.
+7. **The background memory budget gets measured** on the first build. The
+   fallback, if it does not fit, stays as planned: `forecast_days=1` in the
+   background only.
+
+**Doing unless Matt objects** (consequences of this session's findings, not
+new choices):
+- **Freshness by cell, not by 25 km.** The 25 km "near" test predates knowing
+  the grid. A 0.4 degree cell is about 44 x 28 km at 51 deg N, so 25 km can
+  cross into a neighbouring cell - whose forecast is different - while the
+  cache still says CURRENT. Now that the watch computes the cell exactly,
+  "same cell" is the right test. 100 km stays as the EXPIRED limit
+- **Remember several cells' heights, not one.** Four is ~100 bytes and makes
+  a Calgary-Sunshine round trip cost no elevation requests
+- **The glance reads the barometer on draw**, if the compiler accepts
+  `Toybox.Activity` in the glance scope; otherwise it keeps the stored
+  altitude. On a ski day the stored one is wherever the app was last opened
+
+**Decisions for Matt**
+1. **Refresh cadence.** Replaces "every 30 min" (48 fetches a day for data
+   that changes twice). Open-Meteo's source says CAMS arrives about 8 hours
+   after each 00 and 12 UTC run, i.e. about 02:00 and 14:00 in Calgary in
+   summer - but the live status page is blocked from here, so the exact time
+   is unverified. Recommended: **every 3 hours** (8 small fetches a day),
+   which catches a new run within 3 hours whatever its exact arrival time.
+   Alternatives: every 6 hours (4 a day); or twice a day aimed at the
+   expected arrival times, which is leanest but misses a run for 12 hours
+   whenever Open-Meteo is late
+2. **Cell height in the background.** Recommended: **the service fetches it
+   itself** when the cell is new and returns it with the forecast, so the
+   glance is never left uncorrected. Cost: a second request inside the
+   service's 30-second limit, rare because of the wider cell cache.
+   Alternative: leave new cells to the foreground; the glance shows the
+   uncorrected number until the app is opened
+3. **How the service hands data back.** Recommended: **keep
+   `Background.exit()`**, now for a different reason than first given: one
+   writer per key (a foreground fetch and a background run can otherwise
+   write the same keys at the same moment), no reliance on a feature with a
+   reported per-device bug, and a payload far under the ~8 kB cap (48 values
+   is under 1 kB). Alternative: the service writes Storage itself, which
+   drops the payload plumbing
+4. **`uv_index_clear_sky`** (review finding 11: "3.1 now, up to 7 if it
+   clears", the answer to a CAMS cloud forecast that is wrong over the
+   mountains). Recommended: **fetch and store it now**, so the stored shape
+   changes once, not twice. Sub-question: show it on the reading page in v1b,
+   or wait for v3's chart
+
+Build plan not yet edited: its "every 30 min" and its background-storage
+sentence change once decisions 1 and 3 are made.
+
+Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.

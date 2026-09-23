@@ -576,6 +576,11 @@ cell. **Fixed: the app now works the cell out from its own position**, with
 the same nearest-point rounding Open-Meteo uses, and logs the response's
 coordinates separately as `resp=`. Re-run the same three positions.
 
+**Second run, 2026-09-23: PASSED on every point.** `cell=51.20,-115.60` at
+both Sunshine positions (height 2,060 m, cached for the second), and
+`51.20,-114.00` at Calgary (1,101 m). This test does not need running again.
+The steps below are kept for reference.
+
 **What to do.** Pull, stop any debug session, F5. Then in the simulator:
 
 1. **Settings -> Set Position** -> `51.115, -115.763` (Sunshine base). START.
