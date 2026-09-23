@@ -56,7 +56,12 @@ class UvBackground extends System.ServiceDelegate {
         _lat = lat;
         _lon = lon;
 
-        System.println("BG GET " + UvFetch.UV_URL + " lat=" + lat.format("%.4f")
+        // t= is epoch seconds. On the watch, println lines carry no time of
+        // their own, and the diagnostics "bg" line shows when a result was
+        // delivered, which can be hours after the run if nothing was open.
+        // This is what shows whether the service really runs every 3 hours.
+        System.println("BG GET t=" + Time.now().value().toString()
+                       + " " + UvFetch.UV_URL + " lat=" + lat.format("%.4f")
                        + " lon=" + lon.format("%.4f"));
         // Literals, not helpers - see UvClient.requestUv(). The same values
         // as the foreground request, from UvFetch.

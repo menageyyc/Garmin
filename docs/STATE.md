@@ -39,7 +39,11 @@ name a 0.1 degree greenhouse-gas cell, while the UV comes from the 0.4 degree
 cell (tested directly, both ways); background processes CAN write
 `Application.Storage` from API 3.2 but v1b deliberately does not.
 
-**Next session - Matt's call, two candidates:**
+**2026-09-23 (session start): Matt chose the wrist test. The steps are
+"Testing on the watch" at the end of `docs/TOOLCHAIN.md`.** The log lines now
+carry `t=` epoch seconds (see the last log entry). Waiting on his results.
+The two candidates as they were offered, kept for reference:
+
 1. **Put it on the wrist (recommended first).** Sideload (TOOLCHAIN.md
    section 5) and wear it. Everything so far rests on the simulator, whose
    altitude is a fixed -18 m and whose cached fix is always fresh. Things
@@ -179,6 +183,9 @@ Question 25's figures are on screen.
 **2026-09-23: v1b COMPLETE in the simulator.** Background refresh, glance
 delivery, clear-sky ceiling, freshness by cell. **Next: the watch, or v2** -
 see the resume block.
+
+**2026-09-23: the wrist test.** Matt chose it over v2; recommendation
+re-checked and kept. Plan in `docs/TOOLCHAIN.md`, "Testing on the watch".
 
 ---
 
@@ -1744,3 +1751,40 @@ UV OK raw=1.43 hr=1.15 eff=1.21 clr=1.48 cell=51.20,-115.60 resp=51.30,-115.40 c
   remember triggering the first run). The watch will show it
 - **v1b is closed** in the simulator. The resume block at the top of this file
   is rewritten as the handover for a fresh session
+
+### 2026-09-23 - Wrist test chosen; plan written. Logging change NOT COMPILED
+- Read CLAUDE.md, this file, TOOLCHAIN.md, both review documents and every
+  source file. Matt chose the wrist test over v2, if it was still the
+  recommendation. **It is, more strongly than before**, for three reasons:
+  - **The altitude source may be stale on the watch.** Garmin forum reports
+    say `Activity.getActivityInfo().altitude`, read outside a recorded
+    activity, can hold the value from the last activity rather than the live
+    barometer on some devices; others report it refreshing about once a
+    minute on hardware. The simulator's fixed -18 m cannot tell. If it is
+    stale, the headline correction uses the wrong altitude, and v2 would be
+    built on it. The fallback, if needed, is `SensorHistory.getElevationHistory`
+  - **The 60-minute fix-age gate has never met a real cached fix.** On the
+    watch, opening the app indoors with no GPS activity in the last hour
+    will start the GPS and probably time out. How often that happens decides
+    whether the gate is right
+  - **The diagnostics `bg` line cannot show the 3-hour cadence.** It records
+    when a result was *delivered*. Garmin documents that when nothing is
+    running, `Background.exit()` data is saved and delivered the next time
+    the app runs - so a run at 14:00 opened at 18:00 reads `bg OK 0 s ago`
+- **Change made for the test (logging only, not yet compiled):** `t=` epoch
+  seconds on `GET`, `BG GET` and `BG delivered` (which also prints the
+  payload's own fetch time). On the watch println lines carry no time.
+  `Time.now().value()` is already used in all three files; no new API
+- **Facts found, from Garmin docs as quoted by search (pages blocked here):**
+  println reaches `GARMIN\APPS\LOGS\<prg name>.txt` only if the file
+  already exists, case-sensitive on many devices, rolled to `.bak` when
+  large; crash reasons are in `GARMIN\APPS\LOGS\CIQ_LOG.YML`; a temporal
+  event registered with a Duration fires **after** the interval, not at once
+  (which answers the "first run" question on paper - the watch confirms)
+- **Not verified:** TOOLCHAIN section 5's claim that the `.prg` vanishes from
+  `GARMIN\APPS` after install. Forum posts describe sideloaded `.prg` files
+  keeping their name there. Harmless either way
+- Question 18 (indoor GPS accuracy) cannot be answered by this build: it
+  needs a reading taken *during* a recorded activity, which is the v2 data
+  field's job
+

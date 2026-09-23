@@ -775,3 +775,116 @@ the 0.1 degree one. **Do this within the same clock hour as a Sunshine fetch**
    different `resp=` (a different 0.1 degree cell)
 3. **Identical `hr=` confirms it.** A different `hr=` at the same `idx=`
    means the UV comes from the smaller grid after all - report both lines
+
+---
+
+## Testing on the watch
+
+The first time any of this runs on real hardware. Everything so far rests on
+the simulator, whose altitude is a fixed -18 m and whose cached GPS fix is
+always fresh. This test is about the things only the watch can show.
+
+### Before you copy anything: turn on the watch's log
+
+On the watch there is no Debug Console. `System.println` output goes to a text
+file **only if that file already exists**. Without it, the most useful
+evidence in this test is thrown away.
+
+1. Build the `.prg` (**Monkey C: Build for Device**, epix Pro (Gen 2) 47mm,
+   output to `bin`). Note its exact file name, e.g. `Garmin.prg`
+2. Connect the watch by USB. In File Explorer: watch -> `Internal Storage` ->
+   `GARMIN` -> `APPS` -> `LOGS`. Create `LOGS` if it is not there
+3. In `LOGS`, create an **empty** text file with the **same name as the
+   `.prg`, same capitals**, ending `.txt`: `Garmin.prg` -> `Garmin.txt`.
+   (Easiest: make it on the desktop with Notepad, then copy it across.)
+   Windows hides file endings by default - check it is not `Garmin.txt.txt`
+4. Copy the `.prg` into `GARMIN\APPS`, as in section 5. Eject properly
+
+When the log gets big the watch renames it `.bak` and starts a new one. Bring
+both back.
+
+**If the app crashes** (an `IQ!` icon), the reason is in
+`GARMIN\APPS\LOGS\CIQ_LOG.YML`. Copy that file too.
+
+### 1. First open - outdoors, or at a window with open sky
+
+Open the app from the glance list (or the app list). **Do this where GPS can
+see the sky**, the first time: unless you recorded a GPS activity in the last
+hour, the watch's stored position is refused as too old, and the app starts
+the GPS itself for up to 45 s. Indoors that ends `GPS timed out` in red. That
+is the 60-minute rule working, not a fault - but report it.
+
+Wait for a number, then DOWN to diagnostics. **Photograph that page.** Lines:
+
+- **position line 2**: `live GPS fix`, `cached fix, 12 min`, `cached fix, age ?`
+  or `from last fetch`. Which one, and when you last recorded a GPS activity
+- **`1140 m / grid 1101 m`**: the first figure is the watch's own altitude.
+  **Compare it with Garmin's built-in altimeter** (the Altimeter glance or
+  widget) and with the known height of where you are standing. They should be
+  within a few tens of metres. Around Calgary the grid figure should be
+  **1101 m** - the cell measured in the simulator
+- `HTTP 200  idx NN/48`
+- `bg: not run yet` - expected on a first open
+
+### 2. Is the altitude live? (the most important check)
+
+Garmin forum reports say that on some watches the altitude an app can read
+outside a recorded activity is **the last value from the last activity**, not
+the live barometer. The simulator cannot show this, and the whole altitude
+correction rests on it.
+
+Change height by a known amount without recording an activity - several
+flights of stairs, or a drive up or down a hill (100 m or more is best). Open
+the app again and read the diagnostics altitude, next to Garmin's own
+altimeter.
+
+- **It moved with you**: the altitude is live. Good
+- **It stayed put, or matches the end of your last activity**: it is stale.
+  Report it; there is another platform source (`SensorHistory`) to try
+- `No altitude`: report it
+
+### 3. Leave it alone for a day
+
+Wear the watch normally. Do not open the app for **at least 7 hours**, then
+open it once.
+
+- The background service first runs about **3 hours after the first open**
+  (Garmin documents a repeating interval as firing after the interval, not
+  at once - to be confirmed here), then every 3 hours
+- The reading page's `N min ago` should be **under 180 minutes** - that is
+  the age of the last background fetch - unless the phone was out of range,
+  or you have moved to a different grid cell (the app then fetches at once)
+- The diagnostics `bg` line shows when the result was **delivered**, which is
+  when you opened the app - so `bg OK 0 s ago` is expected and proves only
+  that delivery works. The log's timestamps are what show the 3-hour rhythm
+
+Also look at the glance in the carousel a few times during the day - it
+should show a number, not `--`.
+
+### 4. Buttons
+
+- **Long press UP** on the reading page: does the surface menu open? (MENU on
+  this watch. The settings page, DOWN twice then START, is the fallback)
+- **Touchscreen**: does a swipe turn pages, and does a tap do anything?
+
+### 5. Optional: somewhere high
+
+Any trip at least 200 m above or below the Calgary cell height (1,101 m) - a
+mountain drive or hike - should put an altitude line on the reading page
+(`+3% altitude`, `-4% altitude`...). At home the difference is too small to
+print, so `grass, no correction` there is correct.
+
+### What to send back
+
+- The diagnostics photos from steps 1 and 2, and what Garmin's altimeter said
+- `GARMIN\APPS\LOGS\<name>.txt` (and `.bak` if present), and `CIQ_LOG.YML` if
+  there was a crash
+- Roughly when you opened the app each time
+- Anything that surprised you
+
+The log lines carry `t=` numbers - epoch seconds, which Claude converts to
+clock times. `BG GET t=...` is a background run. `BG delivered t=... fetched
+t=...` is the app or glance taking delivery: the first number is when it was
+delivered, the second when it was fetched. A `BG delivered` time that
+matches none of the times you opened the app means the glance took delivery
+(open question 16, on real hardware).

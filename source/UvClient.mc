@@ -200,7 +200,8 @@ class UvClient {
         // no elevation at all on this endpoint, because Open-Meteo holds no
         // terrain heights for CAMS. The cell height comes from
         // requestCellHeight() instead.
-        System.println("GET " + UvFetch.UV_URL + " lat=" + lat.format("%.4f")
+        System.println("GET t=" + Time.now().value().toString()
+                       + " " + UvFetch.UV_URL + " lat=" + lat.format("%.4f")
                        + " lon=" + lon.format("%.4f")
                        + " days=" + UvFetch.FORECAST_DAYS);
         // The two dictionaries are written out here, not returned by a

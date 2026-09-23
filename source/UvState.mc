@@ -212,7 +212,9 @@ class UvState {
         forecast.save();
         Application.Storage.deleteValue(UvFetch.KEY_BG_ERROR);
 
-        System.println("BG delivered: " + forecast.hourCount().toString() + " h, cell "
+        System.println("BG delivered t=" + now.toString() + " fetched t="
+                       + (at == null ? "?" : at.toString()) + ": "
+                       + forecast.hourCount().toString() + " h, cell "
                        + (cellLat == null ? "?" : cellLat.format("%.2f")) + ","
                        + (cellLon == null ? "?" : cellLon.format("%.2f"))
                        + " height " + (height == null ? "none" : height.format("%.0f") + " m")
