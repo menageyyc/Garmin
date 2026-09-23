@@ -267,10 +267,13 @@ class UvClient {
         }
 
         // The baseline for the altitude correction is the height of the grid
-        // cell CAMS computed for. The response names that cell - its
-        // "latitude" and "longitude" are the cell's centre, not ours - and
-        // UvCell keeps the height of the last cell it measured. Same cell: use
-        // it now. New cell: no baseline until requestCellHeight() comes back,
+        // cell CAMS computed for. That cell is worked out from the position
+        // the series was fetched for, by the same nearest-point rounding
+        // Open-Meteo uses - NOT from the response's "latitude"/"longitude",
+        // which name the 0.1 degree greenhouse-gas grid mixed into the same
+        // request (see UvCell.cellLat). UvCell keeps the height of the last
+        // cell it measured. Same cell: use it now. New cell: no baseline
+        // until requestCellHeight() comes back,
         // so for a second or two the correction is off and diagnostics says
         // "no grid". That is an under-report, the safe direction, and far
         // better than pairing a new cell's forecast with an old cell's height.
@@ -283,15 +286,22 @@ class UvClient {
         // combined null test does not narrow the second one.
         var needHeight = false;
         forecast.gridElevation = null;
-        var cellLat = UvNum.asFloat(data.get("latitude"));
-        var cellLon = UvNum.asFloat(data.get("longitude"));
-        if (cellLat != null) {
-            if (cellLon != null) {
-                var known = UvCell.cached(cellLat, cellLon);
+        // The cell's name for the console, as text. Built here rather than
+        // from a local initialised to null: a null-initialised local is
+        // inferred as Null and will not take a Float later.
+        var cellText = "?";
+        var fetchLat = forecast.lat;
+        var fetchLon = forecast.lon;
+        if (fetchLat != null) {
+            if (fetchLon != null) {
+                var cLat = UvCell.cellLat(fetchLat);
+                var cLon = UvCell.cellLon(fetchLon);
+                cellText = cLat.format("%.2f") + "," + cLon.format("%.2f");
+                var known = UvCell.cached(cLat, cLon);
                 forecast.gridElevation = known;
                 if (known == null) {
-                    _cellLat = cellLat;
-                    _cellLon = cellLon;
+                    _cellLat = cLat;
+                    _cellLon = cLon;
                     needHeight = true;
                 }
             }
@@ -307,6 +317,12 @@ class UvClient {
         // for what the default field means, which v1c's test part A would have
         // shown and was skipped.
         var pointElevation = UvNum.asFloat(data.get("elevation"));
+
+        // The response's own coordinates. Logged only, as "resp=": they name
+        // the 0.1 degree greenhouse-gas cell, not the UV cell, and seeing the
+        // two side by side is how that was found.
+        var respLat = UvNum.asFloat(data.get("latitude"));
+        var respLon = UvNum.asFloat(data.get("longitude"));
 
         // The console is a far better diagnostic channel than five small lines
         // on a round screen. slot+Ns should land between 0 and 3599; anything
@@ -325,8 +341,9 @@ class UvClient {
         System.println("UV OK raw=" + (raw == null ? "none" : raw.format("%.2f"))
                        + " hr=" + (hour == null ? "none" : hour.format("%.2f"))
                        + " eff=" + (eff == null ? "none" : eff.format("%.2f"))
-                       + " cell=" + (cellLat == null ? "?" : cellLat.format("%.2f"))
-                       + "," + (cellLon == null ? "?" : cellLon.format("%.2f"))
+                       + " cell=" + cellText
+                       + " resp=" + (respLat == null ? "?" : respLat.format("%.2f"))
+                       + "," + (respLon == null ? "?" : respLon.format("%.2f"))
                        + " cellElev=" + (grid == null ? (needHeight ? "pending" : "ABSENT") : grid.format("%.0f") + " m")
                        + " pointElev=" + (pointElevation == null ? "ABSENT" : pointElevation.format("%.0f") + " m")
                        + " idx=" + idx.toString() + "/" + forecast.hourCount().toString()

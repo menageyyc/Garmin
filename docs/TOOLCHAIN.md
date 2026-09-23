@@ -561,9 +561,20 @@ positions. That request parameter is gone; see the next section.
 
 The altitude correction needs the height of the ~45 km grid cell the UV
 forecast was computed for. Open-Meteo does not store that for CAMS, so the app
-now works it out: it reads which cell the UV answer came from, asks Open-Meteo's
-Elevation API for 49 terrain heights spread across that cell, and averages
-them. Once per cell, then kept - terrain does not move.
+now works it out: it works out which 0.4 degree cell the UV answer came from,
+asks Open-Meteo's Elevation API for 49 terrain heights spread across that
+cell, and averages them. Once per cell, then kept - terrain does not move.
+
+**First run, 2026-09-23: passed everything asked of it, and exposed one
+thing nobody had predicted.** Same cell at both Sunshine positions, no second
+elevation request, `alt=-15%`, Calgary a new cell. But `cell=51.10,-115.80`
+was not the 0.4 degree cell the UV comes from (`51.20,-115.60`). Open-Meteo's
+source shows why: the response's coordinates come from a 0.1 degree
+greenhouse-gas dataset mixed into the same request, which carries no UV. The
+first build therefore averaged the height of a box offset from the real
+cell. **Fixed: the app now works the cell out from its own position**, with
+the same nearest-point rounding Open-Meteo uses, and logs the response's
+coordinates separately as `resp=`. Re-run the same three positions.
 
 **What to do.** Pull, stop any debug session, F5. Then in the simulator:
 
@@ -578,16 +589,25 @@ Copy every line from the Debug Console that starts with `UV OK`, `GET` or
 
 ```
 GET https://air-quality-api.open-meteo.com/v1/air-quality lat=51.1150 lon=-115.7630 days=2
-UV OK raw=... cell=51.20,-115.60 cellElev=pending pointElev=1650 m idx=... alt=0% surface=1%
+UV OK raw=... cell=51.20,-115.60 resp=51.10,-115.80 cellElev=pending pointElev=1687 m idx=... alt=0% surface=0%
 GET https://api.open-meteo.com/v1/elevation cell=51.20,-115.60 points=49
 Cell height 1850 m from 49/49 points, cell=51.20,-115.60 alt=-15%
 ```
 
 The numbers there are placeholders, not predictions. How to read the real ones:
 
-- **`cell=`** is the grid cell the forecast came from. Both Sunshine positions
-  should give the **same** cell (`51.20,-115.60` on paper). Calgary should
-  give a different one
+- **`cell=`** is the 0.4 degree grid cell the forecast came from, worked out
+  by the app. Both Sunshine positions must give **`51.20,-115.60`**, and
+  Calgary **`51.20,-114.00`**. These are no longer predictions on paper: they
+  are Open-Meteo's own rounding, reproduced
+- **`resp=`** is what the response itself says, which is the 0.1 degree
+  greenhouse-gas cell: expect `51.10,-115.80` at both Sunshine positions and
+  `51.00,-114.10` at Calgary, as in the first run. It is logged only, never
+  used
+- **The first Sunshine fetch will make a fresh elevation request** even
+  though the first build already measured a height: the stored height belongs
+  to the wrong box (`51.10,-115.80`), so it no longer matches and is replaced.
+  That is correct
 - **`Cell height ... 49/49 points`** is the new baseline. On the second
   Sunshine position there should be **no** `GET .../elevation` and no
   `Cell height` line: the UV OK line shows `cellElev=` with a number
@@ -609,8 +629,8 @@ The numbers there are placeholders, not predictions. How to read the real ones:
   reading still shows, the diagnostics page says `no grid`, and the
   altitude correction is off. Report the whole line
 - **`cellElev=ABSENT`** with no `GET .../elevation` after it means the
-  air-quality response carried no cell coordinates. Report it; the app
-  cannot pick a cell without them
+  forecast had no position to work a cell out from. It should be impossible
+  after a successful fetch; report it
 
 The diagnostics page's third line (`-18 m / grid 1850 m`) now shows the cell
 height, not the point height.

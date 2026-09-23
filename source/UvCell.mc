@@ -17,8 +17,9 @@ import Toybox.Application;
 // the mean surface height over each model grid box, so the mean of a grid of
 // points across the cell is the same quantity, computed the same way. The
 // points come from Open-Meteo's Elevation API (Copernicus GLO-90, the same
-// 90 m model). The cell is identified from the air-quality response itself,
-// which reports the centre of the grid cell it answered for.
+// 90 m model). The cell is worked out from the position the forecast was
+// fetched for - see cellLat(). The response's own coordinates name a
+// different dataset's grid and are only logged.
 //
 // Terrain does not change, so a cell's height is fetched once and kept.
 //
@@ -27,8 +28,11 @@ import Toybox.Application;
 module UvCell {
 
     // Open-Meteo's cams_global grid: regular, 0.4 degrees, anchored at -90 /
-    // -180. uv_index comes only from this domain, never from cams_europe.
+    // -180, 900 columns by 451 rows. uv_index comes only from this domain -
+    // cams_europe and the greenhouse-gas domain carry none.
     const SPACING = 0.4;
+    const COLS = 900;
+    const ROWS = 451;
 
     // 7 x 7 = 49 points, each at the middle of its own sub-box. The Elevation
     // API takes up to 100. 49 keeps the request URL near 1 kB, and in rugged
@@ -51,6 +55,45 @@ module UvCell {
 
     function pointCount() as Number {
         return SIDE * SIDE;
+    }
+
+    // The centre of the cams_global cell a position is served from, worked
+    // out here rather than read from the response.
+    //
+    // Why (found 2026-09-23, from the first cell-height test and then from
+    // Open-Meteo's source): the air-quality request mixes several CAMS
+    // datasets, and the response's latitude/longitude come from the LAST one
+    // that covers you - outside Europe that is the 0.1 degree greenhouse-gas
+    // grid, inside Europe the 0.1 degree European grid. Neither carries UV.
+    // At Sunshine the response named 51.10,-115.80 while the UV came from the
+    // 0.4 degree cell at 51.20,-115.60, so the first build averaged the
+    // height of the wrong box.
+    //
+    // CAMS has no terrain file, so Open-Meteo picks the plain nearest grid
+    // point: roundf((coordinate - origin) / 0.4). The same rounding here gives
+    // the same cell. The shifted coordinates are never negative, so adding
+    // 0.5 and truncating is rounding to nearest.
+    function cellLat(lat as Float) as Float {
+        var y = ((lat + 90.0) / SPACING + 0.5).toNumber();
+        if (y < 0) {
+            y = 0;
+        }
+        if (y > ROWS - 1) {
+            y = ROWS - 1;
+        }
+        return -90.0 + y * SPACING;
+    }
+
+    // Column 900 is longitude +180, which is the same meridian as column 0.
+    function cellLon(lon as Float) as Float {
+        var x = ((lon + 180.0) / SPACING + 0.5).toNumber();
+        if (x >= COLS) {
+            x = x - COLS;
+        }
+        if (x < 0) {
+            x = 0;
+        }
+        return -180.0 + x * SPACING;
     }
 
     // The stored height, if it belongs to this cell. Null otherwise.

@@ -18,10 +18,12 @@ COMPILED.** v1c built and ran, but `elevation=nan` returned no elevation at
 all, so the altitude correction had no baseline. Cause, from Open-Meteo's own
 source: it stores **no terrain heights for CAMS**. The app now computes the
 cell height itself - the mean of 49 terrain heights across the CAMS cell, from
-Open-Meteo's Elevation API, once per cell (`UvCell.mc`). **Next: Matt compiles
-and runs "Testing the cell height" in TOOLCHAIN.md.** Question 25's figures
-are **derived, approved and written** (grass 0, water +1%, concrete +2%, sand
-+3%; also not yet compiled). Then v1b. See the last session log entry.
+Open-Meteo's Elevation API, once per cell (`UvCell.mc`). **The cell-height test ran
+the same day and passed what it was asked**, but showed the response's
+coordinates name a 0.1 degree greenhouse-gas cell, not the 0.4 degree UV cell.
+**Fixed (the app now computes the cell itself), NOT YET COMPILED. Next: Matt
+re-runs "Testing the cell height".** Question 25's figures are written and
+confirmed on screen. Then v1b. See the last session log entry.
 
 The v1c-before-v1b order was not optional: the review showed v1a's position,
 altitude and freshness logic is what v1b would be built on, and it was wrong.
@@ -154,8 +156,10 @@ two session log entries). v1b waits for v1c, because findings 3, 4, 7 and 10
 change what v1b is built on.
 
 Next action, in order:
-1. **Compile and test the cell height** (TOOLCHAIN.md, "Testing the cell
-   height"). Decided and written 2026-09-23; see the last session log entry
+1. **Re-run the cell-height test** (TOOLCHAIN.md, "Testing the cell
+   height") on the build that computes the cell itself. Expected
+   `cell=51.20,-115.60` at both Sunshine positions and `51.20,-114.00` at
+   Calgary
 2. ~~Question 25 figures~~ **Done 2026-09-23:** grass 0, water +1%, concrete
    +2%, sand +3%, approved by Matt and written, with a rounding fix for the
    on-screen percentages. Compiles with step 1
@@ -188,7 +192,7 @@ Next action, in order:
 | 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | Open - documented behaviour, unverified here |
 | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
 | 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
-| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A) |
+| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A). **Tested 2026-09-23:** `pointElev=1687 m` and `2192 m` at the two Sunshine positions (real ~1,660 / ~2,160 m), so the default field IS the point terrain height - finding 1 confirmed. The mean works (49/49 points, 1,993 m); the response's coordinates turned out to name the wrong grid, and the cell is now computed on the watch |
 | 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | **Answered 2026-09-23: dropped** |
 | 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
 | 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | **Answered 2026-09-23: one decimal.** Already what v1c does |
@@ -257,6 +261,7 @@ Next action, in order:
 | 2026-09-23 | Non-snow surfaces: grass 0, water +1%, concrete +2%, dry sand +3% | TEMIS's f(A) = (1 - 0.25 A_ref)/(1 - 0.25 A) over published erythemal albedos, A_ref = 0.05. The same formula reproduces the measured snow (15-25%) and Salar de Uyuni (+20%) effects. Upper limits: they assume the surface for kilometres around |
 | 2026-09-23 | On-screen percentages rounded, not truncated | 0.02 x 100 is 1.9999999 in a 32-bit float; truncated it read +1% and fell under the 2% threshold, so +2% was never shown. Fresh / old snow now read +18% / +8% |
 | 2026-09-23 | Grid-cell height = mean of 49 Elevation API heights across the cell the UV response names; once per cell, cached | `elevation=nan` returns nothing: Open-Meteo stores no terrain for CAMS. ECMWF builds model terrain as the mean height over each grid box, so this reproduces the same quantity. The response's `latitude`/`longitude` are documented as the cell centre |
+| 2026-09-23 | The CAMS cell is computed on the watch: nearest point of the 0.4 deg cams_global grid, `round((coord - origin) / 0.4)` | Open-Meteo's source: the air-quality request mixes cams_global with a 0.1 deg greenhouse-gas domain, and the response's `latitude`/`longitude` come from the last domain that covers you - the greenhouse grid, which carries no UV. CAMS has no terrain file, so Open-Meteo picks the plain nearest 0.4 deg point. Supersedes "the response's latitude/longitude are the cell centre" in the row above |
 | 2026-09-23 | UV interpolated between hours | Hourly values are instantaneous; the step read was up to 30-50% off on the shoulders |
 | 2026-09-23 | Fresh window 6 h, not 2 h | CAMS runs twice a day; a 2 h refetch returns the same numbers |
 | 2026-09-23 | `migrate()` moved out of `onStart()` | onStart runs in the background process once v1b exists |
@@ -297,6 +302,7 @@ Next action, in order:
 | Using the air-quality `elevation` field as the baseline, with "altitude correction unavailable" on hills | It is the terrain height of the exact spot, so it cancels against the barometer wherever the correction matters. Honest, but it switches the headline feature off permanently |
 | Forecast API `elevation=nan` with an ECMWF model, as a stand-in for CAMS terrain | Returns the 9 km weather model's terrain, not CAMS's ~40 km terrain. In the Rockies those can differ by hundreds of metres, and it leans on the same undocumented behaviour that just failed |
 | A precomputed cell-height table bundled in the app | Needs an offline pipeline Claude's sandbox cannot run, and a global table is ~400,000 cells. The on-watch mean does the same job for one request per cell |
+| Identifying the CAMS cell from the response's `latitude`/`longitude` | They are the cell centre of the LAST domain in the request's mix, which outside Europe is the 0.1 deg greenhouse-gas grid and inside Europe the 0.1 deg European grid. Neither carries `uv_index`. Documented as "the grid-cell used", true only for a single-domain request. Found by the first cell-height test, confirmed in `ForecastapiController.swift` / `GenericReaderMixerRaw.swift` |
 | Two stacked `popView` calls to leave a submenu | Connect IQ promises nothing about unwinding two views inside one callback. The option delegate updates the parent row's sub-label in place and pops once |
 
 ---
@@ -1331,6 +1337,81 @@ for grass), `UvCorrection.mc` (rounding, `clampIncrement`), `UvMainView.mc`
   `(:glance)` modules already call each other
 - Build plan updated: the surface table and question 25
 - Job 1 (the cell-height test) is still waiting on Matt's console lines
+
+Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
+
+### 2026-09-23 - Cell-height test run. One unpredicted finding, fixed. NOT COMPILED
+- Matt ran "Testing the cell height" on the build with the new surface
+  figures. All six surfaces showed as predicted, including concrete's
+  `about +2%` (the rounding fix works) and grass's `no change`.
+
+```
+UV OK ... cell=51.10,-115.80 cellElev=pending pointElev=1687 m idx=5/48 slot+1745s alt=0% surface=0%
+GET https://api.open-meteo.com/v1/elevation cell=51.10,-115.80 points=49
+Cell height 1993 m from 49/49 points, cell=51.10,-115.80 alt=-15%
+UV OK ... cell=51.10,-115.80 cellElev=1993 m pointElev=2192 m idx=5/48 slot+1803s alt=-15% surface=0%
+UV OK ... cell=51.00,-114.10 cellElev=pending pointElev=1061 m idx=5/48 slot+1836s alt=0% surface=0%
+GET https://api.open-meteo.com/v1/elevation cell=51.00,-114.10 points=49
+Cell height 1117 m from 49/49 points, cell=51.00,-114.10 alt=-11%
+```
+
+**What passed, as asked:** the same `cell=` at both Sunshine positions; no
+second elevation request there (`cellElev=1993 m` straight away - the cache
+works); `alt=-15%` at Sunshine (the -1,500 m floor); Calgary a new cell with
+its own request; 49 of 49 heights usable both times; the ~1 kB request URL
+was accepted; `alt=-11%` at Calgary is -18 m against 1,117 m, rounded
+correctly. UV 0.00 is right: idx 5 is 05:00 UTC, night in Alberta.
+
+**Finding 1 of the review is now confirmed live:** `pointElev=1687 m` and
+`2192 m` at two positions 4 km apart, against real heights of about 1,660 and
+2,160 m. The response's default `elevation` is the terrain height of the exact
+spot.
+
+**What failed: the cell was the wrong one.** On paper both Sunshine positions
+sit in the 0.4 deg cell centred 51.20,-115.60. The response named
+51.10,-115.80 - and Calgary 51.00,-114.10. Those three fit a 0.1 deg grid
+exactly and cannot sit on a 0.4 deg grid anchored at -90 / -180.
+
+**Cause, from Open-Meteo's own source** (read directly this time;
+raw.githubusercontent.com is reachable from the sandbox):
+- `CamsDomain.swift`: `cams_global` is still `RegularGrid(nx: 900, ny: 451,
+  latMin: -90, lonMin: -180, dx: 0.4, dy: 0.4)`. `cams_global_greenhouse_gases`
+  is a 0.1 deg global grid carrying only CO2, CO and methane. `cams_europe`
+  returns nil for `uv_index`. So UV comes only from the 0.4 deg grid
+- `ForecastapiController.swift`: the default model, `air_quality_best_match`,
+  reads from all CAMS domains together, with no primary domain set
+- `GenericReaderMixerRaw.swift`: the reported coordinates are
+  `reader.last?.modelLat` - the last domain in that list that covers the
+  point. Outside Europe that is the greenhouse-gas grid
+- `Gridable.swift` / `RegularGrid.swift`: with no terrain file (CAMS has none),
+  the grid point is the plain nearest one, `roundf((coord - origin) / dx)`
+
+**Consequence:** the first build averaged a 0.4 deg box centred on the
+greenhouse cell, offset 0.1 deg north-south and 0.2 deg east-west from the
+real UV cell - about 38% overlap. 1,993 m and 1,117 m are therefore not the
+right cells' heights, though probably not far off. It would also have cached
+per 0.1 deg cell, costing up to 16 times the requests.
+
+**Fix:** `UvCell.cellLat()` / `cellLon()` compute the 0.4 deg cell from the
+fetch position with the same rounding (clamped at the poles, column 900
+wrapped to 0). Checked in 32-bit arithmetic: both Sunshine positions give
+51.20,-115.60 and Calgary 51.20,-114.00. The response's coordinates are logged
+as `resp=` and never used. The stored 1,993 m belongs to the wrong box, so it
+no longer matches and is replaced on the first fetch - no migration needed.
+
+- **Riskiest for the compiler:** nothing new. The null-initialised locals the
+  first draft of this fix used were caught in self-review and replaced with a
+  text string, per CLAUDE.md
+- **Two items from the screenshots, not faults:**
+  - `WARNING - persisted values reset due to settings redefinition` is the
+    simulator clearing Properties because `strings.xml` (a settings prompt)
+    changed. Storage survived, which is why the first launch did not fetch:
+    the cache from the previous session was still current. Worth knowing for
+    real updates later: whether a watch resets settings the same way is
+    unverified
+  - The Problems panel shows 1 item. Not yet read; Matt to report it
+- Build plan updated: the `h_grid` sentence now says the cell is computed from
+  the position, not read from the response
 
 Pushed to `claude/garmin-uv-tracking-app-7y6gk6` for `update.bat`.
 
