@@ -1,0 +1,161 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 10eb644..d71a547 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -49,8 +49,9 @@ These are settled. Do not relitigate them without a reason recorded in `docs/STA
+ ## Conventions
+ 
+ - Monkey C, Connect IQ SDK. Language and API level confirmed in `docs/STATE.md`.
+-- Background service memory is the tightest budget in the project (commonly 32 KB).
+-  Parse and discard; never hold a whole API response.
++- Background service memory is measured at 59 kB on the target, with v1b using
++  13 kB; the glance is ~59.9 kB (`docs/STATE.md`, question 7). Both are small
++  beside the app's 763.6 kB. Parse and discard; never hold a whole API response.
+ - Layouts are resolution-relative, never pixel-hardcoded, so added devices stay cheap.
+ - **Local variable types are inferred.** `var x as Float;` is a compile error.
+   Annotate fields, parameters and return types; never locals.
+diff --git a/docs/STATE.md b/docs/STATE.md
+index 1396a5c..87dfab3 100644
+--- a/docs/STATE.md
++++ b/docs/STATE.md
+@@ -1,7 +1,8 @@
+ # Project state
+ 
+-Running log. Newest entries at the top of each section. Update this whenever a
+-decision is made or a phase moves.
++Running log. Entries are appended in the order they were written, so the
++newest is at the bottom of each section; the resume block below is the current
++summary. Update this whenever a decision is made or a phase moves.
+ 
+ **Build plan (design authority):**
+ https://claude.ai/code/artifact/2a4141df-b000-4c79-a063-a72a89183f17
+@@ -56,7 +57,8 @@ The two candidates as they were offered, kept for reference:
+ 2. **Start v2** - the dose integrator, sessions, the data field. Open
+    questions it needs first: 10 (7-day load in scope?), 11 (can a data field
+    vibrate?), 17 (indoor sub-sport constant names), 18 (indoor GPS accuracy,
+-   a wrist test), 24 (which model reviews the integrator). Hard constraints
++   which v2's data field itself will measure), 24 (which model reviews the
++   integrator). Hard constraints
+    3, 4 and 7 in CLAUDE.md govern it
+ 
+ **Minor leftovers, none blocking:** the "if sky clears" line has never been
+@@ -158,34 +160,10 @@ pushing elsewhere means he never receives the work.
+ 
+ ## Current phase
+ 
+-**v1a, v1c and v1b COMPLETE in the simulator** (v1b closed 2026-09-23; not yet on the watch). Builds clean and runs on epix Pro (Gen 2) 47mm / quatix 7 Pro
+-(5.2.0). The reading page shows UV corrected for altitude and surface with the
+-API's own figure beneath it; the hourly series is cached with the time and
+-place it was fetched for, so a failed fetch degrades to "two hours old" rather
+-than blanking; surface and surroundings are settable on the watch and from the
+-phone; three pages with a page indicator, and BACK returns to the reading page
+-rather than quitting.
+-
+-**The cold review is done: `docs/REVIEW-v1a-findings.md`.** Read it before
+-v1b. Its top four findings change v1b's inputs: the `elevation` field is
+-probably the point terrain height rather than the cell mean (one simulator test
+-decides it), CAMS already applies a snow albedo so the app's +42% double
+-counts, position and altitude are only sampled when a fetch starts so the
+-distance check can never fire, and a real watch's cached fix is of unknown age.
+-
+-**2026-09-23: the review has been verified, and v1c written** (see that day's
+-two session log entries). v1b waits for v1c, because findings 3, 4, 7 and 10
+-change what v1b is built on.
+-
+-**2026-09-23: v1c closed.** The cell-height re-test passed on every point.
+-Question 25's figures are on screen.
+-
+-**2026-09-23: v1b COMPLETE in the simulator.** Background refresh, glance
+-delivery, clear-sky ceiling, freshness by cell. **Next: the watch, or v2** -
+-see the resume block.
+-
+-**2026-09-23: the wrist test.** Matt chose it over v2; recommendation
+-re-checked and kept. Plan in `docs/TOOLCHAIN.md`, "Testing on the watch".
++**v1a, v1c and v1b complete in the simulator; nothing on the watch yet.** The
++wrist test is next - plan in `docs/TOOLCHAIN.md`, "Testing on the watch". What
++the app does now, and what is waiting, is in the resume block at the top of
++this file; the history of each phase is in the session log.
+ 
+ ---
+ 
+@@ -206,12 +184,12 @@ re-checked and kept. Plan in `docs/TOOLCHAIN.md`, "Testing on the watch".
+ | 12 | Does `air-quality-api.open-meteo.com` return UV as expected? | v0 fetch | **ANSWERED 2026-09-22: YES, fully.** `HTTP 200` at night (Olathe, 0.0) and in daylight (Bangkok, 9.5 VERY HIGH). `elevation` correct and location-varying: 336 m vs 4 m |
+ | 13 | Is the manifest product id `epix2pro47mm` correct? | Build target | **Answered: yes** |
+ | 10 | Does v2 include the 7-day load, or today's gauge alone? | v2 scope | Open |
+-| 14 | Does the phone-side App Settings editor show both list settings, and does the on-watch MENU route write the same value? | v1a settings | Open - test in simulator |
+-| 15 | Does `Menu2` + `Menu2InputDelegate` behave as written on API 5.2? | v1a settings | Open - the first build will say |
++| 14 | Does the phone-side App Settings editor show the surface setting, and does the on-watch MENU route write the same value? | v1a settings | Open - test in simulator |
++| 15 | Does `Menu2` + `Menu2InputDelegate` behave as written on API 5.2? | v1a settings | **Answered 2026-09-22: yes.** Compiled and ran; the on-watch settings picker works |
+ | 16 | Does `Background.exit()` deliver to `onBackgroundData` in the glance on this device, not only in the app? | v1b glance freshness | **ANSWERED 2026-09-23 (simulator): yes.** With the glance on screen, a triggered run printed `BG delivered` and no app-view lines. Real hardware still to confirm |
+ | 17 | Exact `Activity.SubSport` constant names for the indoor variants (treadmill, spin, lap swim, indoor rowing, elliptical, virtual) | v2 exposure gate | Open - read them off the local SDK's API docs, or let the compiler reject a wrong one |
+-| 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a real wrist test, not the simulator |
+-| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23 (decision), awaiting compile.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A). **Tested 2026-09-23:** `pointElev=1687 m` and `2192 m` at the two Sunshine positions (real ~1,660 / ~2,160 m), so the default field IS the point terrain height - finding 1 confirmed. The mean works (49/49 points, 1,993 m); the response's coordinates turned out to name the wrong grid, and the cell is now computed on the watch. **Re-tested 2026-09-23 on the computed cell: passed** - `51.20,-115.60` at both Sunshine positions (2,060 m), `51.20,-114.00` at Calgary (1,101 m), cache hit at the second Sunshine position |
++| 18 | What `currentLocationAccuracy` actually reports indoors on epix Pro, versus outdoors mid-run | v2 exposure gate - this is the whole test | Open - needs a reading taken on the wrist *during* a recorded activity, which is the v2 data field's job; the v1 wrist test cannot answer it |
++| 19 | Is the air-quality endpoint's `elevation` the point terrain height (DEM) or the CAMS cell mean, and does `elevation=nan` return the cell mean? | v1c - decides whether the altitude correction exists on a hill | **Answered 2026-09-23, compiled and tested.** `elevation=nan` returns nothing on this endpoint, because Open-Meteo holds no terrain heights for any CAMS domain (source code read). The app now averages 49 Elevation API heights across the cell named in the response. The new console logs `pointElev=` too, which settles what the default field means for free (the skipped part A). **Tested 2026-09-23:** `pointElev=1687 m` and `2192 m` at the two Sunshine positions (real ~1,660 / ~2,160 m), so the default field IS the point terrain height - finding 1 confirmed. The mean works (49/49 points, 1,993 m); the response's coordinates turned out to name the wrong grid, and the cell is now computed on the watch. **Re-tested 2026-09-23 on the computed cell: passed** - `51.20,-115.60` at both Sunshine positions (2,060 m), `51.20,-114.00` at Calgary (1,101 m), cache hit at the second Sunshine position |
+ | 20 | Surroundings: drop it, or rework it to scale total UV? | v1c | **Answered 2026-09-23: dropped** |
+ | 21 | Snow terms: accept ~+15-20% fresh / ~+5-10% old as the increment over CAMS? | v1c | **Answered 2026-09-23: accepted.** Midpoints used: +17.5% / +7.5% |
+ | 22 | Corrected number: keep one decimal, whole number, or a range? | v1c | **Answered 2026-09-23: one decimal.** Already what v1c does |
+@@ -232,7 +210,7 @@ re-checked and kept. Plan in `docs/TOOLCHAIN.md`, "Testing on the watch".
+ | 2026-09-21 | Sun detection via activity state + manual session only | Ambient light sensor is not exposed to Connect IQ. Under-reporting beats false confidence |
+ | 2026-09-21 | Altitude + albedo correction done on-watch | The watch's barometer beats CAMS' ~40 km grid elevation; albedo is known only to the wearer |
+ | 2026-09-21 | Target Epix Pro 47 mm, 416x416 baseline | User's device |
+-| 2026-09-21 | One hotkey toggles session via toggle-on-launch | App reads state at startup, flips, confirms, exits. Does not waste a second hotkey slot |
++| 2026-09-21 | ~~One hotkey toggles session via toggle-on-launch~~ **SUPERSEDED same day: CIQ apps are not hotkey targets (question 9); see "Session launched via glance carousel" below** | App reads state at startup, flips, confirms, exits. Does not waste a second hotkey slot |
+ | 2026-09-21 | Checkpoint prompt: 30 min at UVI >= 6, else 60 min | Caps worst-case phantom dose at ~1.4 MED for type II. Chosen to bound error, not for comfort |
+ | 2026-09-21 | Session safety rests on auto-stop, not the prompt | Background services cannot vibrate or beep, so the prompt is silent and unreliable as a nag |
+ | 2026-09-21 | Three auto-stops: solar elevation < 0, 4h max, activity end | Run without user interaction; kill the overnight worst case |
+@@ -253,12 +231,12 @@ re-checked and kept. Plan in `docs/TOOLCHAIN.md`, "Testing on the watch".
+ | 2026-09-22 | Open-Meteo air-quality endpoint confirmed as the data source | Live `HTTP 200` with a correct grid elevation. No need for the GFS fallback; `BASE_URL` stays as it is |
+ | 2026-09-22 | Poor GPS quality is logged, not gated on; 0,0 is a hard fail | A last-known fix is fine for a 40 km grid cell. 0,0 is the only case that silently misleads, because Open-Meteo answers for Null Island with a plausible tropical UV over HTTP 200 |
+ | 2026-09-22 | v1 split into v1a (foreground) and v1b (background + glance) | Adding `(:background)` scoping to the app class is the same class of bug as the glance scoping problem that bit v0. Isolating it means a compile failure names itself instead of hiding in 600 new lines |
+-| 2026-09-22 | The background service returns data via `Background.exit()`, never by writing storage | A background process gets its own snapshot of the object store, and cannot write Application Properties at all. This **corrects the build plan's architecture diagram**, which draws the service writing to storage directly. **UNDER REVIEW 2026-09-23:** the Properties half holds, but Garmin's Storage docs say a background process CAN write `Application.Storage` from API 3.2, with `onStorageChanged()` to tell the other process. The channel choice is reopened as a v1b design decision; see that day's last log entry |
++| 2026-09-22 | The background service returns data via `Background.exit()`, never by writing storage | A background process gets its own snapshot of the object store, and cannot write Application Properties at all. This **corrects the build plan's architecture diagram**, which draws the service writing to storage directly. **Reason corrected 2026-09-23:** the Properties half holds, but Garmin's Storage docs say a background process CAN write `Application.Storage` from API 3.2. `Background.exit()` was kept for different reasons - see "Background data returns through `Background.exit()`" (decision 3) below |
+ | 2026-09-22 | The background service reads the last-known position from storage; the foreground writes it | `Position` calls from a background process are reported to fail with permission errors. A 40 km grid cell does not need a fresh fix, and never powering the GPS from the background is also the right battery answer |
+ | 2026-09-22 | `forecast_days=2`, not 1 | `forecast_days=1` returns the current UTC day, which cuts at 18:00 local in Calgary. About 500 extra bytes buys a cache that survives an evening with no phone, and v3's forward curve needs it anyway |
+ | 2026-09-22 | A failed fetch leaves the cached reading on screen, marked stale | v0 cleared the reading on every attempt because its only job was exercising the pipe. An app that blanks the moment the phone wanders out of range is worse than one that says "two hours old" |
+ | 2026-09-22 | An irregular hourly series is a failed fetch, not a degraded mode | Storing base-plus-step instead of a parallel timestamp array halves the storage, but is only safe if the step really is uniform. Verified across the whole array at parse time; refusing loudly beats mis-indexing quietly |
+-| 2026-09-22 | Surface and surroundings are settable on the watch as well as the phone | They are situational - you change the surface on arriving at the ski hill, not on install. Both routes write the same `Application.Properties` store, so neither shadows the other |
++| 2026-09-22 | Surface ~~and surroundings~~ settable on the watch as well as the phone (surroundings dropped 2026-09-23, see below) | They are situational - you change the surface on arriving at the ski hill, not on install. Both routes write the same `Application.Properties` store, so neither shadows the other |
+ | 2026-09-22 | Skin type deferred from v1 to v2 | Nothing in v1 consumes MED; burn time and dose are v2 and v3. Shipping a setting that changes nothing visible teaches people to ignore the settings screen |
+ | 2026-09-22 | Storage schema versioned; the first v1 run wipes the v0 store | v0 kept a single number under a different set of keys. There is nothing there worth migrating - it is refetched within seconds - and reading an old key with new expectations is how silent wrongness starts |
+ | 2026-09-22 | Correction factors are clamped, the resulting UV index is not | Altitude delta is clamped to -1500..+4500 m and reflected fraction to 0.60, because both are products of imprecise inputs. The output is left alone: 12 on a glacier really can correct to 24, and clamping that away would hide the case the app exists for |
+@@ -269,7 +247,7 @@ re-checked and kept. Plan in `docs/TOOLCHAIN.md`, "Testing on the watch".
+ | 2026-09-22 | Three exposure states in the UI, not two | "Counting", "not counting because I cannot confirm you are outdoors", and "indoors" must look different. The build plan already required paused to look different from recovering; this is a third |
+ | 2026-09-22 | Per-profile "this one is outdoors" setting, default off | Covers the outdoor activity recorded with GPS off, which is otherwise permanently ambiguous. Set once for Trail Run and never thought about again |
+ | 2026-09-22 | GPS quality is gated on for exposure detection but deliberately NOT for the forecast fetch | Same field, two jobs. A last-known fix is fine for picking a 40 km grid cell; it is useless for telling a treadmill from a road. A future session must not "fix" this inconsistency |
+-| 2026-09-22 | Fable 5.1 does a review pass when v1a is green, and again at the v2 dose integrator | It is Anthropic's most capable widely released model, for demanding reasoning and long-horizon agentic work. The dose integrator is the health-adjacent maths where being wrong matters to skin |
++| 2026-09-22 | Fable 5.1 does a review pass when v1a is green, and again at the v2 dose integrator. **The v2 half reopened 2026-09-23 - see question 24** | It is Anthropic's most capable widely released model, for demanding reasoning and long-horizon agentic work. The dose integrator is the health-adjacent maths where being wrong matters to skin |
+ | 2026-09-23 | v1c (correction pass) comes before v1b | The review showed v1a's position, altitude and freshness logic - what v1b would be built on - was wrong |
+ | 2026-09-23 | Surroundings setting dropped | It scaled only the reflected term, so "Enclosed: forest" left nearly all forest UV untouched while the wearer believed shade was counted. f is not a measurable quantity for the UV index. The number is for open sky; shade becomes a v2 dose pause |
+ | 2026-09-23 | Snow is an increment over CAMS: fresh +17.5%, old +7.5% | CAMS already models snow albedo above 2 cm model snow depth. v1a's +42% counted it again, above the whole measured clear-sky effect of 15-25% |
+diff --git a/source/UvBackground.mc b/source/UvBackground.mc
+index 880fb95..3d07e35 100644
+--- a/source/UvBackground.mc
++++ b/source/UvBackground.mc
+@@ -24,9 +24,9 @@ import Toybox.Time;
+ //   2), so the glance is never left uncorrected until the app is opened.
+ //   That is a second request inside the same 30 seconds; UvCell remembers
+ //   four cells, so it is rare.
+-// - Memory is the tightest budget in the project and not yet measured for
+-//   this device. The response is parsed and dropped inside onUv; only the
+-//   two 48-value arrays are held across the height request.
++// - Memory: 59 kB on this device, 13 kB used (measured 2026-09-23). The
++//   response is parsed and dropped inside onUv; only the two 48-value arrays
++//   are held across the height request.
+ (:background)
+ class UvBackground extends System.ServiceDelegate {
+ 
+@@ -147,10 +147,9 @@ class UvBackground extends System.ServiceDelegate {
+         finish(payload);
+     }
+ 
+-    // The background budget is the one memory figure this project has never
+-    // measured, and the tightest (commonly quoted near 32 kB). Logged at the
+-    // point where the parsed series is held alongside the response, which is
+-    // about as full as this process gets.
++    // Logged at the point where the parsed series is held alongside the
++    // response, which is about as full as this process gets. Measured at
++    // 13/59 kB on 2026-09-23.
+     private function memoryText() as String {
+         var stats = System.getSystemStats();
+         return "mem=" + (stats.usedMemory / 1024).toString() + "/"
